@@ -12,9 +12,10 @@ import io
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Mareero System", page_icon="🏢", layout="wide")
 
-# --- HIDE FOOTER & WATERMARK (CSS) ---
+# --- CSS: HIDE WATERMARKS & STYLE BUTTONS ---
 st.markdown("""
 <style>
+    /* Hide Streamlit Logos */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
@@ -26,7 +27,7 @@ st.markdown("""
         padding-bottom: 5rem;
     }
     
-    /* Style for the Delete Button to be Red and Small */
+    /* Make the Delete Icon Button Red and Round-ish */
     div[data-testid="stButton"] button {
         border-radius: 5px;
     }
@@ -41,7 +42,7 @@ except Exception as e:
     st.error(f"⚠️ Error: Fadlan hubi internetkaaga ama Database-ka. ({e})")
     st.stop()
 
-# --- 2. REPORT ENGINES (Restored Original Logic) ---
+# --- 2. PROFESSIONAL REPORT ENGINES ---
 
 def generate_excel(df):
     output = io.BytesIO()
@@ -55,12 +56,14 @@ def generate_pdf(df):
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
-    # --- HEADER ---
-    primary_color = colors.HexColor("#8B0000")
-    text_color = colors.HexColor("#2C3E50")
+    # --- COLORS & STYLES ---
+    primary_color = colors.HexColor("#8B0000") # Dark Red
+    text_color = colors.HexColor("#2C3E50")    # Dark Blue/Grey
     
+    # --- HEADER ---
     c.setFillColor(primary_color)
     c.rect(0, height-100, width, 100, fill=1, stroke=0)
+    
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 26)
     c.drawCentredString(width/2, height-60, "MAREERO OPERATION REPORT")
@@ -69,51 +72,107 @@ def generate_pdf(df):
     date_str = datetime.now().strftime('%d %B %Y')
     c.drawCentredString(width/2, height-80, f"Taariikhda: {date_str}")
 
-    # --- SUMMARY ---
+    # --- SUMMARY SECTION ---
     c.setFillColor(text_color)
     c.setFont("Helvetica-Bold", 16)
     c.drawString(40, height-150, "1. KOOBITAAN (SUMMARY):")
     
+    # Calc Metrics
     total = len(df)
     missing = len(df[df['Category'] == 'Maqan']) if not df.empty and 'Category' in df.columns else 0
     new_req = len(df[df['Category'] == 'Dalab Cusub']) if not df.empty and 'Category' in df.columns else 0
     
+    # Draw Summary Box
     c.setStrokeColor(colors.lightgrey)
     c.rect(40, height-230, 515, 60, fill=0)
+    
     c.setFont("Helvetica", 12)
     c.drawString(60, height-190, f"Wadarta Shaqooyinka: {total}")
     c.drawString(240, height-190, f"Alaabta Maqan: {missing}")
     c.drawString(420, height-190, f"Dalabyada Cusub: {new_req}")
 
-    # --- LIST ---
-    y_list = height - 260
+    # --- CHARTS SECTION (RESTORED) ---
+    y_chart = height-280
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, y_list, "2. ALAABTA (ITEMS LIST):")
+    c.drawString(40, y_chart, "2. SHAXDA XOGTA (CHARTS):")
     
-    y_row = y_list - 40
+    if not df.empty and 'Category' in df.columns and 'Branch' in df.columns:
+        try:
+            # Chart 1: Pie
+            fig1, ax1 = plt.subplots(figsize=(4, 3))
+            category_counts = df['Category'].value_counts()
+            if not category_counts.empty:
+                ax1.pie(category_counts, labels=category_counts.index, autopct='%1.0f%%', colors=['#ff9999','#66b3ff','#99ff99','#ffcc99'])
+                ax1.set_title("Qeybaha", fontsize=10)
+                
+                img1 = io.BytesIO()
+                plt.savefig(img1, format='png', bbox_inches='tight')
+                plt.close(fig1)
+                img1.seek(0)
+                c.drawImage(ImageReader(img1), 40, y_chart-220, width=240, height=180)
+            
+            # Chart 2: Bar
+            fig2, ax2 = plt.subplots(figsize=(4, 3))
+            branch_counts = df['Branch'].value_counts()
+            if not branch_counts.empty:
+                branch_counts.plot(kind='bar', color='#8B0000', ax=ax2)
+                ax2.set_title("Laamaha", fontsize=10)
+                plt.xticks(rotation=45, ha='right')
+                
+                img2 = io.BytesIO()
+                plt.savefig(img2, format='png', bbox_inches='tight')
+                plt.close(fig2)
+                img2.seek(0)
+                c.drawImage(ImageReader(img2), 300, y_chart-220, width=240, height=180)
+        except Exception:
+            c.drawString(40, y_chart-50, "Error generating charts.")
+    else:
+        c.drawString(40, y_chart-50, "Xog kuma filna shaxda.")
+
+    # --- CRITICAL LIST SECTION ---
+    y_list = y_chart - 260
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, y_list, "3. ALAABTA MUHIIMKA AH (CRITICAL ITEMS):")
+    
+    # Table Header
+    c.setFillColor(colors.lightgrey)
+    c.rect(40, y_list-30, 515, 20, fill=1, stroke=0)
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(50, y_list-25, "CATEGORY")
+    c.drawString(150, y_list-25, "ITEM NAME")
+    c.drawString(300, y_list-25, "BRANCH")
+    c.drawString(420, y_list-25, "NOTE")
+    
+    y_row = y_list - 50
     c.setFont("Helvetica", 10)
     
-    if not df.empty:
-        # Show last 15 items
-        recent_df = df.tail(15)
-        for _, row in recent_df.iterrows():
-            line_text = f"{row.get('Branch','')} | {row.get('Category','')} | {row.get('Item','')} ({row.get('Note','')})"
-            c.drawString(40, y_row, line_text[:90])
-            c.line(40, y_row-5, 555, y_row-5)
+    if not df.empty and 'Category' in df.columns:
+        # Filter for Maqan or Dalab Sare
+        critical_df = df[df['Category'].isin(['Maqan', 'Dalab Sare'])].head(15)
+        for _, row in critical_df.iterrows():
+            c.drawString(50, y_row, str(row.get('Category', '')))
+            c.drawString(150, y_row, str(row.get('Item', ''))[:25]) # Cut text if too long
+            c.drawString(300, y_row, str(row.get('Branch', '')))
+            c.drawString(420, y_row, str(row.get('Note', ''))[:20])
+            c.line(40, y_row-5, 555, y_row-5) # Underline
             y_row -= 20
-            if y_row < 50: break
+            
+            if y_row < 50: # New page check
+                c.showPage()
+                y_row = height - 50
 
     c.save()
     buffer.seek(0)
     return buffer
 
 # --- 3. THE APP UI ---
-st.title("🏢 Mareero Auto Spare Parts")
+st.title("🏢 Mareero System")
 
-# RESTORED: Original Tab Names
+# TABS
 tab_staff, tab_manager = st.tabs(["📝 Qeybta Shaqaalaha (Staff)", "🔐 Maamulka (Manager)"])
 
-# --- STAFF TAB (Original Somali/English) ---
+# --- STAFF TAB ---
 with tab_staff:
     st.info("Fadlan halkan ku diiwaangeli warbixintaada maalinlaha ah.")
     
@@ -124,9 +183,8 @@ with tab_staff:
             branch = st.selectbox("📍 Branch", branch_options)
             employee = st.text_input("👤 Magacaaga (Your Name)")
         with c2:
-            # RESTORED: Original Keys
             cat_map = {
-                "Alaabta Maqan (Missing)": "Maqan",
+                "Alaab Maqan (Missing)": "Maqan",
                 "Dalab Sare (High Demand)": "Dalab Sare",
                 "Dalab Cusub (New Request)": "Dalab Cusub"
             }
@@ -135,7 +193,6 @@ with tab_staff:
         
         note = st.text_input("📝 Faahfaahin / Tirada (Note/Qty)")
         
-        # RESTORED: Original Button Text
         if st.form_submit_button("🚀 Gudbi (Submit)", use_container_width=True):
             if employee and item:
                 try:
@@ -166,17 +223,16 @@ with tab_staff:
 # --- MANAGER TAB ---
 with tab_manager:
     
-    # --- 1. NEW FEATURE: LOGIN ROW WITH ENTER BUTTON ---
-    # Columns [5, 1] means the input is 5 times wider than the button
+    # --- 1. LOGIN ROW WITH ENTER BUTTON ---
+    # [5, 1] means input is wide, button is small
     c_pass, c_btn = st.columns([5, 1], vertical_alignment="bottom")
     
     with c_pass:
         password = st.text_input("Geli Furaha (Password)", type="password", placeholder="Enter Password...", label_visibility="collapsed")
     with c_btn:
-        # The Enter Button next to password
+        # The Enter Button (Arrow Icon)
         login_click = st.button("➡️", help="Enter")
 
-    # --- CHECK PASSWORD ---
     if password == "mareero2025" or login_click:
         if password == "mareero2025":
             st.success("🔓 Soo dhawoow Maamule")
@@ -190,7 +246,7 @@ with tab_manager:
                 df = pd.DataFrame()
 
             if not df.empty:
-                # RESTORED: Original Metric Names
+                # METRICS
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Wadarta Guud", len(df))
                 m2.metric("Alaabta Maqan", len(df[df['Category'] == 'Maqan']) if 'Category' in df.columns else 0)
@@ -211,10 +267,10 @@ with tab_manager:
 
                 st.divider()
 
-                # --- 2. NEW FEATURE: TABLE WITH DELETE ICON ---
+                # --- 2. EDIT/DELETE TABLE ---
                 st.subheader("🛠️ Wax ka bedel / Tirtir (Edit/Delete)")
                 
-                # Add a 'Select' column for checkboxes
+                # Add Checkbox Column
                 df_with_delete = df.copy()
                 df_with_delete.insert(0, "Select", False)
 
@@ -233,13 +289,13 @@ with tab_manager:
                 st.write("") # Spacer
                 
                 # ACTION BUTTONS LAYOUT
-                # Save (Left) ----- Empty Space ----- Delete Icon (Right)
+                # Save (Left) ----- Spacer ----- Delete Icon (Right)
                 c_save, c_mid, c_del = st.columns([3, 4, 1])
 
                 with c_save:
                     if st.button("💾 Kaydi Isbedelka (Save)", use_container_width=True):
                         try:
-                            # Remove the 'Select' column before saving
+                            # Remove 'Select' before saving
                             final_df = edited_df.drop(columns=["Select"])
                             conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
                             st.cache_data.clear()
@@ -252,9 +308,8 @@ with tab_manager:
                     # THE SMALL DELETE ICON
                     if st.button("🗑️", type="primary", help="Delete Selected Rows"):
                         try:
-                            # Filter out selected rows
+                            # Filter and Delete
                             rows_to_keep = edited_df[edited_df["Select"] == False]
-                            # Remove the 'Select' column
                             final_df = rows_to_keep.drop(columns=["Select"])
                             
                             conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
@@ -268,4 +323,3 @@ with tab_manager:
                 
         else:
             st.error("Furaha waa khalad (Wrong Password)")
-
