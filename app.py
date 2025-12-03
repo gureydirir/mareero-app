@@ -12,26 +12,7 @@ import io
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Mareero System", page_icon="🏢", layout="wide")
 
-# --- HIDE STREAMLIT ADMIN ELEMENTS (FINAL FIX) ---
-# This CSS uses !important to override Streamlit's default styles for all users.
-hide_st_style = """
-            <style>
-            /* Hide the main hamburger menu */
-            #MainMenu {visibility: hidden !important;}
-            /* Hide the standard footer container */
-            footer {visibility: hidden !important; display: none !important;}
-            /* Hide the default header bar */
-            header {visibility: hidden !important; display: none !important;}
-            /* Hide the specific container that holds the 'Created by/Hosted with' text */
-            div[data-testid="stDecoration"] {visibility: hidden !important; display: none !important;}
-            div[data-testid="stSidebarHeader"] {visibility: hidden !important; display: none !important;}
-            .css-1r650w8 {visibility: hidden !important;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
-
-# ... rest of your code ...
-
+# NOTE: The failing CSS was removed here. The file .streamlit/config.toml handles hiding the footer now.
 
 # --- 1. SETUP DATABASE ---
 try:
@@ -64,7 +45,7 @@ def generate_pdf(df):
     
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 26)
-    c.drawCentredString(width/2, height-60, "MAREERO AUTO SPARE PARTS REPORT")
+    c.drawCentredString(width/2, height-60, "MAREERO OPERATION REPORT")
     
     c.setFont("Helvetica", 12)
     date_str = datetime.now().strftime('%d %B %Y')
@@ -172,7 +153,7 @@ with tab_staff:
     with st.form("log_form"):
         c1, c2 = st.columns(2)
         with c1:
-            # UPDATED BRANCH LIST
+            # BRANCH OPTIONS
             branch_options = [
                 "Kaydka M.Hassan",
                 "Branch 1",
@@ -183,7 +164,7 @@ with tab_staff:
             branch = st.selectbox("📍 Branch", branch_options)
             employee = st.text_input("👤 Magacaaga (Your Name)")
         with c2:
-            # REMOVED "Damage"
+            # CATEGORIES
             cat_map = {
                 "Alaab Maqan (Missing)": "Maqan",
                 "Dalab Sare (High Demand)": "Dalab Sare",
@@ -290,5 +271,3 @@ with tab_manager:
         
     elif password:
         st.error("Furaha waa khalad (Wrong Password)")
-
-
