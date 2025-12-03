@@ -76,24 +76,28 @@ def generate_pdf(df):
     if not df.empty:
         # Chart 1: Pie
         fig1, ax1 = plt.subplots(figsize=(4, 3))
-        df['Category'].value_counts().plot(kind='pie', autopct='%1.0f%%', ax=ax1, colors=['#ff9999','#66b3ff','#99ff99','#ffcc99'])
-        ax1.set_ylabel('')
-        ax1.set_title("Qeybaha", fontsize=10)
-        
-        img1 = io.BytesIO()
-        plt.savefig(img1, format='png', bbox_inches='tight')
-        img1.seek(0)
-        c.drawImage(ImageReader(img1), 40, y_chart-220, width=240, height=180)
+        category_counts = df['Category'].value_counts()
+        if not category_counts.empty:
+            category_counts.plot(kind='pie', autopct='%1.0f%%', ax=ax1, colors=['#ff9999','#66b3ff','#99ff99','#ffcc99'])
+            ax1.set_ylabel('')
+            ax1.set_title("Qeybaha", fontsize=10)
+            
+            img1 = io.BytesIO()
+            plt.savefig(img1, format='png', bbox_inches='tight')
+            img1.seek(0)
+            c.drawImage(ImageReader(img1), 40, y_chart-220, width=240, height=180)
         
         # Chart 2: Bar
         fig2, ax2 = plt.subplots(figsize=(4, 3))
-        df['Branch'].value_counts().plot(kind='bar', color='#8B0000', ax=ax2)
-        ax2.set_title("Laamaha", fontsize=10)
-        
-        img2 = io.BytesIO()
-        plt.savefig(img2, format='png', bbox_inches='tight')
-        img2.seek(0)
-        c.drawImage(ImageReader(img2), 300, y_chart-220, width=240, height=180)
+        branch_counts = df['Branch'].value_counts()
+        if not branch_counts.empty:
+            branch_counts.plot(kind='bar', color='#8B0000', ax=ax2)
+            ax2.set_title("Laamaha", fontsize=10)
+            
+            img2 = io.BytesIO()
+            plt.savefig(img2, format='png', bbox_inches='tight')
+            img2.seek(0)
+            c.drawImage(ImageReader(img2), 300, y_chart-220, width=240, height=180)
     else:
         c.drawString(40, y_chart-50, "Xog kuma filna shaxda.")
 
@@ -147,15 +151,22 @@ with tab_staff:
     with st.form("log_form"):
         c1, c2 = st.columns(2)
         with c1:
-            branch = st.selectbox("📍 Dooro Laanta (Branch)", ["Laanta 1", "Laanta 2", "Laanta 3", "Laanta 4", "Laanta 5"])
+            # UPDATED BRANCH LIST (As you requested)
+            branch_options = [
+                "Branch 1",
+                "Branch 3", 
+                "Branch 4", 
+                "Branch 5",
+                "Kaydka M.Hassan"
+            ]
+            branch = st.selectbox("📍 Branch", branch_options)
             employee = st.text_input("👤 Magacaaga (Your Name)")
         with c2:
-            # SOMALI OPTIONS MAPPED TO DATABASE
+            # REMOVED "Damage"
             cat_map = {
                 "Alaab Maqan (Missing)": "Maqan",
                 "Dalab Sare (High Demand)": "Dalab Sare",
-                "Dalab Cusub (New Request)": "Dalab Cusub",
-                "Burbur (Damaged)": "Burbur"
+                "Dalab Cusub (New Request)": "Dalab Cusub"
             }
             category_selection = st.selectbox("📂 Nooca Warbixinta (Report Type)", list(cat_map.keys()))
             item = st.text_input("📦 Magaca Alaabta (Item Name)")
@@ -170,7 +181,6 @@ with tab_staff:
                 data = conn.read(worksheet="Sheet1", ttl=0)
                 data = data.dropna(how="all")
                 
-                # Use the mapped value (e.g., "Maqan") not the display value
                 real_category = cat_map[category_selection]
                 
                 new_row = pd.DataFrame([{
@@ -199,7 +209,7 @@ with tab_manager:
         df = conn.read(worksheet="Sheet1", ttl=0)
         df = df.dropna(how="all")
         
-        # 1. LIVE METRICS (Translated)
+        # 1. LIVE METRICS
         m1, m2, m3 = st.columns(3)
         m1.metric("Wadarta Guud", len(df))
         m2.metric("Alaabta Maqan", len(df[df['Category'] == 'Maqan']))
@@ -207,7 +217,7 @@ with tab_manager:
         
         st.divider()
         
-        # 2. DOWNLOAD BUTTONS (PDF & EXCEL)
+        # 2. DOWNLOAD BUTTONS
         st.subheader("📄 Warbixinada (Reports)")
         col_pdf, col_xls = st.columns(2)
         
@@ -233,9 +243,29 @@ with tab_manager:
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
-        # 3. LIVE TABLE
-        st.subheader("📋 Xogta Tooska ah (Live Data)")
-        st.dataframe(df.sort_values(by="Date", ascending=False), use_container_width=True)
+        st.divider()
+
+        # 3. EDIT / DELETE SECTION
+        st.subheader("🛠️ Wax ka bedel / Tirtir (Edit/Delete)")
+        st.info("ℹ️ Si aad u tirtirto: Dooro safka (row) kadibna riix 'Delete' oo ku yaal keyboard-kaaga.")
+        
+        # Editable Data Editor
+        edited_df = st.data_editor(
+            df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="data_editor"
+        )
+        
+        # SAVE BUTTON
+        if st.button("💾 Kaydi Isbedelka (Save Changes)"):
+            try:
+                conn.update(worksheet="Sheet1", data=edited_df)
+                st.success("✅ Xogta waa la cusbooneysiiyay! (Database Updated)")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error updating: {e}")
         
     elif password:
         st.error("Furaha waa khalad (Wrong Password)")
