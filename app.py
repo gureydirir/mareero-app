@@ -58,7 +58,7 @@ def generate_pdf(df):
     c.rect(0, height-100, width, 100, fill=1, stroke=0)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 26)
-    c.drawCentredString(width/2, height-60, "MAREERO OPERATION REPORT")
+    c.drawCentredString(width/2, height-60, "MAREERO AUTO SPARE PARTS STAFF REPORT")
     
     c.setFont("Helvetica", 12)
     date_str = datetime.now().strftime('%d %B %Y')
@@ -158,7 +158,7 @@ def generate_pdf(df):
     return buffer
 
 # --- 3. APP UI ---
-st.title("🏢 Mareero System")
+st.title("🏢 Mareero Auto Spare Parts")
 
 tab_staff, tab_manager = st.tabs(["📝 Qeybta Shaqaalaha (Staff)", "🔐 Maamulka (Manager)"])
 
@@ -226,7 +226,7 @@ with tab_manager:
             df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
             df = df.dropna(how="all")
         except:
-            df = pd.DataFrame() # Fallback if read fails
+            df = pd.DataFrame() 
 
         if not df.empty:
             # 1. LIVE METRICS
@@ -270,23 +270,61 @@ with tab_manager:
 
             # 3. EDIT / DELETE SECTION
             st.subheader("🛠️ Wax ka bedel / Tirtir (Edit/Delete)")
-            st.info("ℹ️ Select rows and press delete key to remove items.")
             
+            # A. Add a temporary 'Delete' column for the checkboxes
+            df_with_delete = df.copy()
+            df_with_delete.insert(0, "Delete", False)
+
+            # B. The Data Editor
             edited_df = st.data_editor(
-                df,
-                num_rows="dynamic",
+                df_with_delete,
+                num_rows="fixed", # This hides the messy toolbar icons
+                hide_index=True,  # This hides the 0, 1, 2 numbers (The "hera")
                 use_container_width=True,
-                key="data_editor"
+                key="data_editor",
+                column_config={
+                    "Delete": st.column_config.CheckboxColumn(
+                        "Tirtir?",
+                        help="Select rows to delete",
+                        default=False,
+                    )
+                }
             )
             
-            if st.button("💾 Kaydi Isbedelka (Save Changes)"):
-                try:
-                    conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=edited_df)
-                    st.cache_data.clear()
-                    st.success("✅ Xogta waa la cusbooneysiiyay!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error updating: {e}")
+            # C. The Action Buttons
+            col_save, col_delete = st.columns([1, 1])
+
+            with col_save:
+                if st.button("💾 Kaydi Isbedelka (Save Edits)"):
+                    try:
+                        # Remove the 'Delete' column before saving
+                        final_df = edited_df.drop(columns=["Delete"])
+                        conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
+                        st.cache_data.clear()
+                        st.success("✅ Updated Successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+            with col_delete:
+                # The DELETE Button (Red)
+                if st.button("🗑️ Delete Selected Rows", type="primary"):
+                    try:
+                        # 1. Filter out the rows where 'Delete' is True
+                        rows_to_keep = edited_df[edited_df["Delete"] == False]
+                        
+                        # 2. Drop the 'Delete' column so we don't save it to Google Sheets
+                        final_df = rows_to_keep.drop(columns=["Delete"])
+                        
+                        # 3. Update Google Sheets
+                        conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
+                        
+                        st.cache_data.clear()
+                        st.success("✅ Items Deleted!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting: {e}")
+
         else:
             st.warning("⚠️ Xog ma jiro (No Data Found)")
             
