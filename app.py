@@ -5,41 +5,38 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
 import io
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Mareero System", page_icon="🏢", layout="wide")
 
-# --- 1. CSS TO HIDE WATERMARK & OPTIMIZE MOBILE ---
+# --- 1. REMOVE STREAMLIT WATERMARKS & MENUS ---
 st.markdown("""
 <style>
-    /* Hide the top hamburger menu */
+    /* 1. Hide the Hamburger Menu (Top Right) */
     #MainMenu {visibility: hidden;}
     
-    /* Hide the top header bar completely */
+    /* 2. Hide the Top Header Bar */
     header {visibility: hidden;}
     
-    /* Hide the "Hosted with Streamlit" Footer */
+    /* 3. Hide the "Made with Streamlit" Footer */
     footer {visibility: hidden;}
     
-    /* Hide the "Created by" badge */
-    div[data-testid="stStatusWidget"] {visibility: hidden;}
+    /* 4. Aggressively hide the deploy button and decorations */
+    .stDeployButton {display:none;}
+    div[data-testid="stDecoration"] {display:none;}
     
-    /* Remove padding at top of phone screen so logo looks better */
+    /* 5. Adjust top padding since header is gone */
     .block-container {
         padding-top: 1rem;
-        padding-bottom: 5rem;
-    }
-    
-    /* Make metrics look cleaner on mobile */
-    [data-testid="stMetricValue"] {
-        font-size: 1.5rem;
+        padding-bottom: 0rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATABASE CONNECTION ---
+# --- 2. SETUP DATABASE ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     SHEET_URL = st.secrets["gcp_sheet_url"] 
@@ -47,7 +44,7 @@ except Exception as e:
     st.error(f"⚠️ Connection Error: {e}")
     st.stop()
 
-# --- 3. REPORT FUNCTIONS ---
+# --- 3. REPORT ENGINES ---
 def generate_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -65,7 +62,7 @@ def generate_pdf(df):
     c.rect(0, height-100, width, 100, fill=1, stroke=0)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 26)
-    c.drawCentredString(width/2, height-60, "MAREERO AUTO SPARE PARTS STAFF REPORT")
+    c.drawCentredString(width/2, height-60, "MAREERO OPERATION REPORT")
     
     c.setFont("Helvetica", 12)
     c.drawCentredString(width/2, height-80, f"Date: {datetime.now().strftime('%d %B %Y')}")
@@ -91,14 +88,8 @@ def generate_pdf(df):
     
     if not df.empty:
         for i, row in df.head(20).iterrows():
-            # Handle missing columns gracefully
-            branch_txt = str(row.get('Branch',''))
-            cat_txt = str(row.get('Category',''))
-            item_txt = str(row.get('Item',''))
-            note_txt = str(row.get('Note',''))
-            
-            text = f"{branch_txt} - {cat_txt} - {item_txt} ({note_txt})"
-            c.drawString(40, y, text[:90]) 
+            text = f"{row.get('Branch','')} - {row.get('Category','')} - {row.get('Item','')} ({row.get('Note','')})"
+            c.drawString(40, y, text[:90]) # Limit text length
             y -= 15
             if y < 50: break
 
@@ -125,15 +116,11 @@ with tab_staff:
             item = st.text_input("📦 Magaca Alaabta")
         
         note = st.text_input("📝 Note / Qty")
-        
-        # use_container_width makes button full width on mobile
-        if st.form_submit_button("🚀 Submit", use_container_width=True):
+        if st.form_submit_button("🚀 Submit"):
             if employee and item:
                 try:
-                    data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
-                    if data is None: data = pd.DataFrame()
+                    data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0) or pd.DataFrame()
                     data = data.dropna(how="all")
-                    
                     new_row = pd.DataFrame([{
                         "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "Branch": branch, "Employee": employee,
@@ -142,49 +129,44 @@ with tab_staff:
                     conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=pd.concat([data, new_row], ignore_index=True))
                     st.cache_data.clear()
                     st.success("Sent!")
-                except Exception as e: st.error(f"Error: {e}")
+                except Exception as e: st.error(e)
             else: st.error("Fill Name & Item")
 
 # --- MANAGER TAB ---
 with tab_manager:
-    # 1. LOGIN ROW 
-    # Columns [4, 1] keeps button small on desktop, but they stack on mobile
-    c_pass, c_btn = st.columns([4, 1], vertical_alignment="bottom")
+    # 1. LOGIN ROW (Password + Enter Button)
+    c_pass, c_btn = st.columns([4, 1])
     with c_pass:
-        password = st.text_input("Password", type="password", placeholder="Enter Password Here...")
+        password = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter Password Here...")
     with c_btn:
-        # use_container_width ensures button matches input width on mobile
-        login_click = st.button("🔓 Enter", use_container_width=True)
+        st.markdown("""<style>div.stButton > button {width: 100%;}</style>""", unsafe_allow_html=True)
+        login_click = st.button("🔓 Enter")
 
     # 2. MANAGER DASHBOARD
-    if password == "mareero2025" or login_click: 
+    if password == "mareero2025" or login_click: # Simple check, for real security rely on session state
         if password == "mareero2025":
             st.success("✅ Logged In")
             
             try:
-                df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
-                if df is None: df = pd.DataFrame()
+                df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0) or pd.DataFrame()
                 df = df.dropna(how="all")
             except: df = pd.DataFrame()
 
             if not df.empty:
-                # Metrics (These stack automatically on mobile)
+                # Metrics
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Total", len(df))
                 m2.metric("Missing", len(df[df['Category']=='Maqan']) if 'Category' in df.columns else 0)
                 m3.metric("New Req", len(df[df['Category']=='Dalab Cusub']) if 'Category' in df.columns else 0)
                 
-                st.divider()
-                
                 # Downloads
-                st.caption("📄 Reports")
                 c_pdf, c_xls = st.columns(2)
                 with c_pdf:
-                    if st.button("Download PDF", use_container_width=True):
-                        st.download_button("⬇️ Save PDF", generate_pdf(df), "report.pdf", "application/pdf", use_container_width=True)
+                    if st.button("📄 PDF Report"):
+                        st.download_button("⬇️ Download PDF", generate_pdf(df), "report.pdf", "application/pdf")
                 with c_xls:
-                    if st.button("Download Excel", use_container_width=True):
-                        st.download_button("⬇️ Save Excel", generate_excel(df), "data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    if st.button("📊 Excel Data"):
+                        st.download_button("⬇️ Download Excel", generate_excel(df), "data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
                 st.divider()
                 st.write("### 🛠️ Edit / Delete Items")
@@ -202,13 +184,11 @@ with tab_manager:
                     column_config={"Delete": st.column_config.CheckboxColumn("❌", width="small")}
                 )
 
-                st.write("")
-                # Action Buttons
-                # Layout: Save (Left) --- Space --- Delete (Right)
-                c_save, c_mid, c_del = st.columns([2, 2, 1])
+                # Action Buttons (Save Left, Delete Right)
+                c_save, c_mid, c_del = st.columns([2, 3, 1])
                 
                 with c_save:
-                    if st.button("💾 Save Changes", use_container_width=True):
+                    if st.button("💾 Save Changes"):
                         try:
                             final = edited.drop(columns=["Delete"])
                             conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final)
@@ -218,8 +198,8 @@ with tab_manager:
                         except Exception as e: st.error(e)
                 
                 with c_del:
-                    # Primary type makes it Red
-                    if st.button("🗑️ Delete", type="primary", use_container_width=True):
+                    # Small Professional Delete Button
+                    if st.button("🗑️ Delete", type="primary"):
                         try:
                             final = edited[edited["Delete"]==False].drop(columns=["Delete"])
                             conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final)
