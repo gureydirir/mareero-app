@@ -12,15 +12,19 @@ import io
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Mareero System", page_icon="🏢", layout="wide")
 
-# --- HIDE STREAMLIT STYLE (CLEAN LOOK) ---
+# --- HIDE STREAMLIT ADMIN ELEMENTS (FINAL FIX) ---
+# This code removes the footer, the header bar, and the top-right menu for all viewers.
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
+            /* Aggressive fix for footer/menu wrappers */
+            .css-vk32z5 {visibility: hidden;} 
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
+
 
 # --- 1. SETUP DATABASE ---
 try:
@@ -53,7 +57,7 @@ def generate_pdf(df):
     
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 26)
-    c.drawCentredString(width/2, height-60, "MAREERO OPERATION REPORT")
+    c.drawCentredString(width/2, height-60, "MAREERO AUTO SPARE PARTS REPORT")
     
     c.setFont("Helvetica", 12)
     date_str = datetime.now().strftime('%d %B %Y')
