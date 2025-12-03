@@ -1,5 +1,5 @@
 streamlit
-st-gsheets-connection
+streamlit-gsheets
 pandas
 matplotlib
 reportlab
