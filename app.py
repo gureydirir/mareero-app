@@ -5,38 +5,49 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
 import io
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Mareero System", page_icon="🏢", layout="wide")
 
-# --- HIDE FOOTER CSS ---
+# --- 1. CSS TO HIDE WATERMARK & OPTIMIZE MOBILE ---
 st.markdown("""
 <style>
-#MainMenu {visibility: hidden !important;}
-header {visibility: hidden !important; height: 0 !important;}
-footer {visibility: hidden !important; display: none !important;}
-div[data-testid="stDecoration"] {visibility: hidden !important; height: 0 !important;}
-.main {padding-bottom: 0 !important;}
-div.block-container {padding-bottom: 0 !important; margin-bottom: -150px !important;}
-div[data-testid="stStatusWidget"] {visibility: hidden !important; display: none !important;}
+    /* Hide the top hamburger menu */
+    #MainMenu {visibility: hidden;}
+    
+    /* Hide the top header bar completely */
+    header {visibility: hidden;}
+    
+    /* Hide the "Hosted with Streamlit" Footer */
+    footer {visibility: hidden;}
+    
+    /* Hide the "Created by" badge */
+    div[data-testid="stStatusWidget"] {visibility: hidden;}
+    
+    /* Remove padding at top of phone screen so logo looks better */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 5rem;
+    }
+    
+    /* Make metrics look cleaner on mobile */
+    [data-testid="stMetricValue"] {
+        font-size: 1.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. SETUP DATABASE ---
+# --- 2. DATABASE CONNECTION ---
 try:
-    # Uses [connections.gsheets] in secrets.toml by default
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Get the specific URL from secrets if you need to target a specific sheet
     SHEET_URL = st.secrets["gcp_sheet_url"] 
 except Exception as e:
-    st.error(f"⚠️ Error connecting to Database: {e}")
+    st.error(f"⚠️ Connection Error: {e}")
     st.stop()
 
-# --- 2. REPORT ENGINES ---
-
+# --- 3. REPORT FUNCTIONS ---
 def generate_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -49,295 +60,173 @@ def generate_pdf(df):
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
-    # Colors
-    primary_color = colors.HexColor("#8B0000") 
-    text_color = colors.HexColor("#2C3E50")    
-    
     # Header
-    c.setFillColor(primary_color)
+    c.setFillColor(colors.HexColor("#8B0000"))
     c.rect(0, height-100, width, 100, fill=1, stroke=0)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 26)
     c.drawCentredString(width/2, height-60, "MAREERO AUTO SPARE PARTS STAFF REPORT")
     
     c.setFont("Helvetica", 12)
-    date_str = datetime.now().strftime('%d %B %Y')
-    c.drawCentredString(width/2, height-80, f"Taariikhda: {date_str}")
+    c.drawCentredString(width/2, height-80, f"Date: {datetime.now().strftime('%d %B %Y')}")
 
     # Metrics
     total = len(df)
-    # Safety check for empty dataframe or missing columns
-    if not df.empty and 'Category' in df.columns:
-        missing = len(df[df['Category'] == 'Maqan'])
-        new_req = len(df[df['Category'] == 'Dalab Cusub'])
-    else:
-        missing = 0
-        new_req = 0
+    missing = len(df[df['Category'] == 'Maqan']) if not df.empty and 'Category' in df.columns else 0
+    new_req = len(df[df['Category'] == 'Dalab Cusub']) if not df.empty and 'Category' in df.columns else 0
 
-    # Summary Section
-    c.setFillColor(text_color)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, height-150, "1. KOOBITAAN (SUMMARY):")
-    
-    c.setStrokeColor(colors.lightgrey)
-    c.rect(40, height-230, 515, 60, fill=0)
-    
-    c.setFont("Helvetica", 12)
-    c.drawString(60, height-190, f"Wadarta Shaqooyinka: {total}")
-    c.drawString(240, height-190, f"Alaabta Maqan: {missing}")
-    c.drawString(420, height-190, f"Dalabyada Cusub: {new_req}")
-
-    # Charts Section
-    y_chart = height-280
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, y_chart, "2. SHAXDA XOGTA (CHARTS):")
-    
-    if not df.empty and 'Category' in df.columns and 'Branch' in df.columns:
-        # Pie Chart
-        fig1, ax1 = plt.subplots(figsize=(4, 3))
-        category_counts = df['Category'].value_counts()
-        if not category_counts.empty:
-            ax1.pie(category_counts, labels=category_counts.index, autopct='%1.0f%%', colors=['#ff9999','#66b3ff','#99ff99','#ffcc99'])
-            ax1.set_title("Qeybaha", fontsize=10)
-            
-            img1 = io.BytesIO()
-            plt.savefig(img1, format='png', bbox_inches='tight')
-            plt.close(fig1) # IMPORTANT: Close plot to prevent memory leak
-            img1.seek(0)
-            c.drawImage(ImageReader(img1), 40, y_chart-220, width=240, height=180)
-        
-        # Bar Chart
-        fig2, ax2 = plt.subplots(figsize=(4, 3))
-        branch_counts = df['Branch'].value_counts()
-        if not branch_counts.empty:
-            branch_counts.plot(kind='bar', color='#8B0000', ax=ax2)
-            ax2.set_title("Laamaha", fontsize=10)
-            plt.xticks(rotation=45, ha='right')
-            
-            img2 = io.BytesIO()
-            plt.savefig(img2, format='png', bbox_inches='tight')
-            plt.close(fig2) # IMPORTANT: Close plot
-            img2.seek(0)
-            c.drawImage(ImageReader(img2), 300, y_chart-220, width=240, height=180)
-    else:
-        c.drawString(40, y_chart-50, "Xog kuma filna shaxda.")
-
-    # Critical List
-    y_list = y_chart - 260
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(40, y_list, "3. ALAABTA MUHIIMKA AH (CRITICAL ITEMS):")
-    
-    c.setFillColor(colors.lightgrey)
-    c.rect(40, y_list-30, 515, 20, fill=1, stroke=0)
+    # Summary
     c.setFillColor(colors.black)
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(50, y_list-25, "CATEGORY")
-    c.drawString(150, y_list-25, "ITEM NAME")
-    c.drawString(300, y_list-25, "BRANCH")
-    c.drawString(420, y_list-25, "NOTE")
-    
-    y_row = y_list - 50
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, height-150, "SUMMARY:")
+    c.setFont("Helvetica", 12)
+    c.drawString(40, height-180, f"Total Jobs: {total}  |  Missing Items: {missing}  |  New Requests: {new_req}")
+
+    # Table
+    y = height-230
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "RECENT ITEMS:")
+    y -= 20
     c.setFont("Helvetica", 10)
     
-    if not df.empty and 'Category' in df.columns:
-        critical_df = df[df['Category'].isin(['Maqan', 'Dalab Sare'])].head(15)
-        for _, row in critical_df.iterrows():
-            c.drawString(50, y_row, str(row['Category']))
-            c.drawString(150, y_row, str(row.get('Item', ''))[:25])
-            c.drawString(300, y_row, str(row.get('Branch', '')))
-            c.drawString(420, y_row, str(row.get('Note', ''))[:20])
-            c.line(40, y_row-5, 555, y_row-5)
-            y_row -= 20
+    if not df.empty:
+        for i, row in df.head(20).iterrows():
+            # Handle missing columns gracefully
+            branch_txt = str(row.get('Branch',''))
+            cat_txt = str(row.get('Category',''))
+            item_txt = str(row.get('Item',''))
+            note_txt = str(row.get('Note',''))
             
-            if y_row < 50:
-                c.showPage()
-                y_row = height - 50
+            text = f"{branch_txt} - {cat_txt} - {item_txt} ({note_txt})"
+            c.drawString(40, y, text[:90]) 
+            y -= 15
+            if y < 50: break
 
     c.save()
     buffer.seek(0)
     return buffer
 
-# --- 3. APP UI ---
+# --- 4. APP UI ---
 st.title("🏢 Mareero Auto Spare Parts")
 
-tab_staff, tab_manager = st.tabs(["📝 Qeybta Shaqaalaha (Staff)", "🔐 Maamulka (Manager)"])
+tab_staff, tab_manager = st.tabs(["📝 Staff Area", "🔐 Manager Area"])
 
 # --- STAFF TAB ---
 with tab_staff:
     st.info("Fadlan halkan ku diiwaangeli warbixintaada maalinlaha ah.")
-    
-    with st.form("log_form", clear_on_submit=True): # clear_on_submit helps UX
+    with st.form("log_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            branch_options = ["Kaydka M.Hassan", "Branch 1", "Branch 3", "Branch 4", "Branch 5"]
-            branch = st.selectbox("📍 Branch", branch_options)
-            employee = st.text_input("👤 Magacaaga (Your Name)")
+            branch = st.selectbox("📍 Branch", ["Kaydka M.Hassan", "Branch 1", "Branch 3", "Branch 4", "Branch 5"])
+            employee = st.text_input("👤 Magacaaga")
         with c2:
-            cat_map = {
-                "Alaab Maqan (Missing)": "Maqan",
-                "Dalab Sare (High Demand)": "Dalab Sare",
-                "Dalab Cusub (New Request)": "Dalab Cusub"
-            }
-            category_selection = st.selectbox("📂 Nooca Warbixinta", list(cat_map.keys()))
-            item = st.text_input("📦 Magaca Alaabta (Item Name)")
+            cat_map = {"Alaab Maqan": "Maqan", "Dalab Sare": "Dalab Sare", "Dalab Cusub": "Dalab Cusub"}
+            cat_key = st.selectbox("📂 Nooca", list(cat_map.keys()))
+            item = st.text_input("📦 Magaca Alaabta")
         
-        note = st.text_input("📝 Faahfaahin / Tirada (Note/Qty)")
-        submitted = st.form_submit_button("🚀 Gudbi (Submit)")
+        note = st.text_input("📝 Note / Qty")
         
-        if submitted:
+        # use_container_width makes button full width on mobile
+        if st.form_submit_button("🚀 Submit", use_container_width=True):
             if employee and item:
                 try:
                     data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
-                    # Handle case where sheet is totally empty
-                    if data is None:
-                        data = pd.DataFrame(columns=["Date", "Branch", "Employee", "Category", "Item", "Note"])
-                    else:
-                        data = data.dropna(how="all")
-                    
-                    real_category = cat_map[category_selection]
+                    if data is None: data = pd.DataFrame()
+                    data = data.dropna(how="all")
                     
                     new_row = pd.DataFrame([{
                         "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Branch": branch,
-                        "Employee": employee,
-                        "Category": real_category,
-                        "Item": item,
-                        "Note": note
+                        "Branch": branch, "Employee": employee,
+                        "Category": cat_map[cat_key], "Item": item, "Note": note
                     }])
-                    
-                    updated = pd.concat([data, new_row], ignore_index=True)
-                    conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated)
-                    st.cache_data.clear() # Clear cache to force reload next time
-                    st.success("✅ Waa la gudbiyay! (Sent Successfully)")
-                except Exception as e:
-                    st.error(f"Error submitting data: {e}")
-            else:
-                st.error("⚠️ Fadlan buuxi Magacaaga iyo Alaabta.")
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=pd.concat([data, new_row], ignore_index=True))
+                    st.cache_data.clear()
+                    st.success("Sent!")
+                except Exception as e: st.error(f"Error: {e}")
+            else: st.error("Fill Name & Item")
 
 # --- MANAGER TAB ---
 with tab_manager:
-    # --- LOGIN SECTION ---
-    # We use columns to make the button sit next to the input
-    c_pass, c_login = st.columns([4, 1]) 
-    
+    # 1. LOGIN ROW 
+    # Columns [4, 1] keeps button small on desktop, but they stack on mobile
+    c_pass, c_btn = st.columns([4, 1], vertical_alignment="bottom")
     with c_pass:
-        password = st.text_input("Geli Furaha (Password)", type="password", label_visibility="collapsed", placeholder="Enter Password")
-    
-    with c_login:
-        # This button allows the user to click "Enter" manually
-        login_btn = st.button("🔓 Enter")
+        password = st.text_input("Password", type="password", placeholder="Enter Password Here...")
+    with c_btn:
+        # use_container_width ensures button matches input width on mobile
+        login_click = st.button("🔓 Enter", use_container_width=True)
 
-    # Check password (works if they press Enter key OR click the button)
-    if password == "mareero2025":
-        st.success("🔓 Soo dhawoow Maamule")
-        
-        # Load Data
-        try:
-            df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
-            df = df.dropna(how="all")
-        except:
-            df = pd.DataFrame() 
+    # 2. MANAGER DASHBOARD
+    if password == "mareero2025" or login_click: 
+        if password == "mareero2025":
+            st.success("✅ Logged In")
+            
+            try:
+                df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
+                if df is None: df = pd.DataFrame()
+                df = df.dropna(how="all")
+            except: df = pd.DataFrame()
 
-        if not df.empty:
-            # 1. LIVE METRICS
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Wadarta Guud", len(df))
-            m2.metric("Maqan", len(df[df['Category'] == 'Maqan']) if 'Category' in df.columns else 0)
-            m3.metric("Dalab Cusub", len(df[df['Category'] == 'Dalab Cusub']) if 'Category' in df.columns else 0)
-            
-            st.divider()
-            
-            # 2. DOWNLOAD BUTTONS
-            st.subheader("📄 Warbixinada (Reports)")
-            col_pdf, col_xls = st.columns(2)
-            
-            with col_pdf:
-                if st.button("Download PDF Report"):
-                    with st.spinner("Samaynaya PDF..."):
+            if not df.empty:
+                # Metrics (These stack automatically on mobile)
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total", len(df))
+                m2.metric("Missing", len(df[df['Category']=='Maqan']) if 'Category' in df.columns else 0)
+                m3.metric("New Req", len(df[df['Category']=='Dalab Cusub']) if 'Category' in df.columns else 0)
+                
+                st.divider()
+                
+                # Downloads
+                st.caption("📄 Reports")
+                c_pdf, c_xls = st.columns(2)
+                with c_pdf:
+                    if st.button("Download PDF", use_container_width=True):
+                        st.download_button("⬇️ Save PDF", generate_pdf(df), "report.pdf", "application/pdf", use_container_width=True)
+                with c_xls:
+                    if st.button("Download Excel", use_container_width=True):
+                        st.download_button("⬇️ Save Excel", generate_excel(df), "data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
+                st.divider()
+                st.write("### 🛠️ Edit / Delete Items")
+                
+                # Data Editor with Checkbox
+                df_edit = df.copy()
+                df_edit.insert(0, "Delete", False)
+                
+                edited = st.data_editor(
+                    df_edit,
+                    key="editor",
+                    num_rows="fixed",
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={"Delete": st.column_config.CheckboxColumn("❌", width="small")}
+                )
+
+                st.write("")
+                # Action Buttons
+                # Layout: Save (Left) --- Space --- Delete (Right)
+                c_save, c_mid, c_del = st.columns([2, 2, 1])
+                
+                with c_save:
+                    if st.button("💾 Save Changes", use_container_width=True):
                         try:
-                            pdf_bytes = generate_pdf(df)
-                            st.download_button(
-                                label="📥 Save PDF",
-                                data=pdf_bytes,
-                                file_name=f"Report_{datetime.now().date()}.pdf",
-                                mime="application/pdf"
-                            )
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-            
-            with col_xls:
-                if st.button("Download Excel Data"):
-                    with st.spinner("Samaynaya Excel..."):
-                        xls_bytes = generate_excel(df)
-                        st.download_button(
-                            label="📥 Save Excel",
-                            data=xls_bytes,
-                            file_name=f"Data_{datetime.now().date()}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
+                            final = edited.drop(columns=["Delete"])
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final)
+                            st.cache_data.clear()
+                            st.success("Saved!")
+                            st.rerun()
+                        except Exception as e: st.error(e)
+                
+                with c_del:
+                    # Primary type makes it Red
+                    if st.button("🗑️ Delete", type="primary", use_container_width=True):
+                        try:
+                            final = edited[edited["Delete"]==False].drop(columns=["Delete"])
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final)
+                            st.cache_data.clear()
+                            st.success("Deleted!")
+                            st.rerun()
+                        except Exception as e: st.error(e)
 
-            st.divider()
-
-            # 3. EDIT / DELETE SECTION
-            st.subheader("🛠️ Wax ka bedel / Tirtir")
-            
-            # Add checkbox column
-            df_with_delete = df.copy()
-            df_with_delete.insert(0, "Delete", False)
-
-            # The Data Editor
-            edited_df = st.data_editor(
-                df_with_delete,
-                num_rows="fixed", 
-                hide_index=True,
-                use_container_width=True,
-                key="data_editor",
-                column_config={
-                    "Delete": st.column_config.CheckboxColumn(
-                        "❌",
-                        help="Select to remove",
-                        default=False,
-                        width="small"
-                    )
-                }
-            )
-            
-            st.write("") # Add a little space
-            
-            # --- ACTION BUTTONS (PROFESSIONAL LAYOUT) ---
-            # We use 3 columns:
-            # Col 1: Save Button (Left)
-            # Col 2: Empty Space (Middle)
-            # Col 3: Delete Button (Right - Small)
-            
-            col_save, col_space, col_del = st.columns([2, 3, 1])
-
-            with col_save:
-                if st.button("💾 Kaydi (Save Changes)"):
-                    try:
-                        final_df = edited_df.drop(columns=["Delete"])
-                        conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
-                        st.cache_data.clear()
-                        st.success("✅ Saved!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
-            with col_del:
-                # Small, compact delete button
-                if st.button("🗑️ Delete", type="primary"):
-                    try:
-                        rows_to_keep = edited_df[edited_df["Delete"] == False]
-                        final_df = rows_to_keep.drop(columns=["Delete"])
-                        conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
-                        st.cache_data.clear()
-                        st.success("Deleted!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
-        else:
-            st.warning("⚠️ Xog ma jiro (No Data)")
-            
-    elif password and password != "mareero2025":
-        st.error("Furaha waa khalad (Wrong Password)")
+            else: st.warning("No Data Found")
+        else: st.error("Wrong Password")
