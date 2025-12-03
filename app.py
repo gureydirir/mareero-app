@@ -48,10 +48,13 @@ div[data-testid="stStatusWidget"] {
 
 
 # --- 1. SETUP DATABASE ---
+# This looks for credentials in st.secrets["gcp_service_account"]
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-except:
-    st.error("⚠️ Error: Fadlan hubi internetkaaga ama Database-ka.")
+    # Define the sheet URL securely from secrets
+    SHEET_URL = st.secrets["gcp_sheet_url"] 
+except Exception as e:
+    st.error(f"⚠️ Error: Fadlan hubi internetkaaga ama Database-ka. ({e})")
     st.stop()
 
 # --- 2. PROFESSIONAL REPORT ENGINES ---
@@ -113,7 +116,7 @@ def generate_pdf(df):
         fig1, ax1 = plt.subplots(figsize=(4, 3))
         category_counts = df['Category'].value_counts()
         if not category_counts.empty:
-            category_counts.plot(kind='pie', autopct='%1.0f%%', ax=ax1, colors=['#ff9999','#66b3ff','#99ff99','#ffcc99'])
+            ax1.pie(category_counts, labels=category_counts.index, autopct='%1.0f%%', colors=['#ff9999','#66b3ff','#99ff99','#ffcc99'])
             ax1.set_ylabel('')
             ax1.set_title("Qeybaha", fontsize=10)
             
@@ -212,8 +215,8 @@ with tab_staff:
         
         if submitted:
             if employee and item:
-                # Load Data
-                data = conn.read(worksheet="Sheet1", ttl=0)
+                # Load Data using the secure SHEET_URL
+                data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
                 data = data.dropna(how="all")
                 
                 real_category = cat_map[category_selection]
@@ -228,7 +231,8 @@ with tab_staff:
                 }])
                 
                 updated = pd.concat([data, new_row], ignore_index=True)
-                conn.update(worksheet="Sheet1", data=updated)
+                # Update Data using the secure SHEET_URL
+                conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated)
                 st.success("✅ Waa la gudbiyay! (Sent Successfully)")
             else:
                 st.error("⚠️ Fadlan buuxi Magacaaga iyo Alaabta.")
@@ -240,8 +244,8 @@ with tab_manager:
     if password == "mareero2025":
         st.success("🔓 Soo dhawoow Maamule")
         
-        # Load Data
-        df = conn.read(worksheet="Sheet1", ttl=0)
+        # Load Data using the secure SHEET_URL
+        df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
         df = df.dropna(how="all")
         
         # 1. LIVE METRICS
@@ -257,7 +261,8 @@ with tab_manager:
         col_pdf, col_xls = st.columns(2)
         
         with col_pdf:
-            if st.button("Download PDF Report"):
+            pdf_button = st.button("Download PDF Report")
+            if pdf_button:
                 with st.spinner("Samaynaya PDF..."):
                     pdf_bytes = generate_pdf(df)
                     st.download_button(
@@ -268,7 +273,8 @@ with tab_manager:
                     )
         
         with col_xls:
-            if st.button("Download Excel Data"):
+            xls_button = st.button("Download Excel Data")
+            if xls_button:
                 with st.spinner("Samaynaya Excel..."):
                     xls_bytes = generate_excel(df)
                     st.download_button(
@@ -295,7 +301,8 @@ with tab_manager:
         # SAVE BUTTON
         if st.button("💾 Kaydi Isbedelka (Save Changes)"):
             try:
-                conn.update(worksheet="Sheet1", data=edited_df)
+                # Update Data using the secure SHEET_URL
+                conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=edited_df)
                 st.success("✅ Xogta waa la cusbooneysiiyay! (Database Updated)")
                 st.cache_data.clear()
                 st.rerun()
