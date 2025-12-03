@@ -46,8 +46,23 @@ except Exception as e:
 
 def generate_excel(df):
     output = io.BytesIO()
+    # Use OpenPyXL engine to allow formatting
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Warbixin')
+        
+        # --- NEW FIX: Auto-Adjust Column Widths ---
+        worksheet = writer.sheets['Warbixin']
+        for i, col in enumerate(df.columns):
+            # Calculate the maximum length of data in the column
+            max_len = max(
+                df[col].astype(str).map(len).max(), # Length of longest data cell
+                len(str(col)) # Length of the header name
+            ) + 2 # Add a little extra space padding
+            
+            # Set the column width (A, B, C, etc.)
+            col_letter = chr(65 + i) # 65 is ASCII for 'A'
+            worksheet.column_dimensions[col_letter].width = max_len
+            
     output.seek(0)
     return output
 
@@ -77,7 +92,7 @@ def generate_pdf(df):
     c.setFont("Helvetica-Bold", 16)
     c.drawString(40, height-140, "1. KOOBITAAN (SUMMARY):")
     
-    # >> SOMALI DESCRIPTION <<
+    # SOMALI DESCRIPTION
     c.setFont("Helvetica", 10)
     c.setFillColor(colors.darkgrey)
     c.drawString(40, height-160, "Halkan waxaa ku qoran warbixinta guud ee maanta, oo ay ku jiraan tirada shaqooyinka,")
@@ -103,7 +118,7 @@ def generate_pdf(df):
     c.setFont("Helvetica-Bold", 16)
     c.drawString(40, y_chart, "2. SHAXDA XOGTA (CHARTS):")
     
-    # >> SOMALI DESCRIPTION <<
+    # SOMALI DESCRIPTION
     c.setFont("Helvetica", 10)
     c.setFillColor(colors.darkgrey)
     c.drawString(40, y_chart-20, "Shaxdan hoose waxay kala dhigdhigeysaa xogta iyadoo loo eegayo Qeybaha (Categories)")
@@ -148,7 +163,7 @@ def generate_pdf(df):
     c.setFont("Helvetica-Bold", 16)
     c.drawString(40, y_list, "3. ALAABTA MUHIIMKA AH (CRITICAL ITEMS):")
 
-    # >> SOMALI DESCRIPTION <<
+    # SOMALI DESCRIPTION
     c.setFont("Helvetica", 10)
     c.setFillColor(colors.darkgrey)
     c.drawString(40, y_list-20, "Liiskan wuxuu muujinayaa alaabta 'Maqan' ama 'Dalabka Sare' ah ee u baahan fiiro gaar ah.")
@@ -186,7 +201,7 @@ def generate_pdf(df):
     return buffer
 
 # --- 3. THE APP UI ---
-st.title("🏢 Mareero Auto Spare Parts")
+st.title("🏢 Mareero System")
 
 # TABS
 tab_staff, tab_manager = st.tabs(["📝 Qeybta Shaqaalaha (Staff)", "🔐 Maamulka (Manager)"])
@@ -203,8 +218,8 @@ with tab_staff:
             employee = st.text_input("👤 Magacaaga (Your Name)")
         with c2:
             cat_map = {
-                "Alaabta Maqan (Missing)": "Maqan",
-                "Dalab sare (High Demand)": "Dalab sare",
+                "Alaab Maqan (Missing)": "Maqan",
+                "Dalab Sare (High Demand)": "Dalab Sare",
                 "Dalab Cusub (New Request)": "Dalab Cusub"
             }
             category_selection = st.selectbox("📂 Nooca Warbixinta (Report Type)", list(cat_map.keys()))
@@ -268,78 +283,4 @@ with tab_manager:
                 # METRICS
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Wadarta Guud", len(df))
-                m2.metric("Alaabta Maqan", len(df[df['Category'] == 'Maqan']) if 'Category' in df.columns else 0)
-                m3.metric("Dalabyada Cusub", len(df[df['Category'] == 'Dalab Cusub']) if 'Category' in df.columns else 0)
-                
-                st.divider()
-                
-                # DOWNLOAD BUTTONS
-                st.subheader("📄 Warbixinada (Reports)")
-                col_pdf, col_xls = st.columns(2)
-                
-                with col_pdf:
-                    if st.button("Download PDF Report", use_container_width=True):
-                        st.download_button("📥 Download PDF", generate_pdf(df), "mareero_report.pdf", "application/pdf")
-                with col_xls:
-                    if st.button("Download Excel Data", use_container_width=True):
-                        st.download_button("📥 Download Excel", generate_excel(df), "mareero_data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-                st.divider()
-
-                # --- 2. EDIT/DELETE TABLE ---
-                st.subheader("🛠️ Wax ka bedel / Tirtir (Edit/Delete)")
-                
-                # Add Checkbox Column
-                df_with_delete = df.copy()
-                df_with_delete.insert(0, "Select", False)
-
-                # The Table
-                edited_df = st.data_editor(
-                    df_with_delete,
-                    num_rows="fixed",
-                    hide_index=True,
-                    use_container_width=True,
-                    key="data_editor",
-                    column_config={
-                        "Select": st.column_config.CheckboxColumn("❌", width="small")
-                    }
-                )
-                
-                st.write("") # Spacer
-                
-                # ACTION BUTTONS LAYOUT
-                # Save (Left) ----- Spacer ----- Delete Icon (Right)
-                c_save, c_mid, c_del = st.columns([3, 4, 1])
-
-                with c_save:
-                    if st.button("💾 Kaydi Isbedelka (Save)", use_container_width=True):
-                        try:
-                            # Remove 'Select' before saving
-                            final_df = edited_df.drop(columns=["Select"])
-                            conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
-                            st.cache_data.clear()
-                            st.success("✅ Saved!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-
-                with c_del:
-                    # THE SMALL DELETE ICON
-                    if st.button("🗑️", type="primary", help="Delete Selected Rows"):
-                        try:
-                            # Filter and Delete
-                            rows_to_keep = edited_df[edited_df["Select"] == False]
-                            final_df = rows_to_keep.drop(columns=["Select"])
-                            
-                            conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
-                            st.cache_data.clear()
-                            st.success("Deleted!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-            else:
-                st.warning("⚠️ Xog ma jiro (No Data Found)")
-                
-        else:
-            st.error("Furaha waa khalad (Wrong Password)")
-
+                m2.metric("Alaabta Maqan", len(df[df['Category']
