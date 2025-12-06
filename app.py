@@ -114,8 +114,8 @@ def generate_pdf(df):
     
     # Calc Metrics
     total = len(df)
-    missing = len(df[df['Category'] == 'Maqan']) if not df.empty and 'Category' in df.columns else 0
-    new_req = len(df[df['Category'] == 'Dalab Cusub']) if not df.empty and 'Category' in df.columns else 0
+    missing = len(df[df['Category'] == 'alaabha Maqan']) if not df.empty and 'Category' in df.columns else 0
+    new_req = len(df[df['Category'] == 'bahiyaha dadweynaha']) if not df.empty and 'Category' in df.columns else 0
     
     # Draw Summary Box
     c.setStrokeColor(colors.lightgrey)
@@ -227,14 +227,14 @@ with tab_staff:
     with st.form("log_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            branch_options = ["Kaydka M.Hassan", "Branch 1", "Branch 3", "Branch 4", "Branch 5"]
+            branch_options = ["Head Q", "Branch 1", "Branch 3", "Branch 4", "Branch 5" , "Kaydka M.hassan"]
             branch = st.selectbox("📍 Branch", branch_options)
             employee = st.text_input("👤 Magacaaga (Your Name)")
         with c2:
             cat_map = {
-                "Alaabta Maqan (Missing)": "Maqan",
-                "Dalab Sare (High Demand)": "Dalab Sare",
-                "Dalab Cusub (New Request)": "Dalab Cusub"
+                "alaabta Maqan (Missing)": "Maqan",
+                "alaabta Suqqa leh (High Demand)": "Suuq leh",
+                "bahiyaha Dadweynaha (New Request)": "Dadweynaha"
             }
             category_selection = st.selectbox("📂 Nooca Warbixinta (Report Type)", list(cat_map.keys()))
             item = st.text_input("📦 Magaca Alaabta (Item Name)")
@@ -297,7 +297,7 @@ with tab_manager:
                 # METRICS (CRASH FIX: SPLIT LINES TO PREVENT SYNTAX ERROR)
                 count_total = len(df)
                 count_missing = len(df[df['Category'] == 'Maqan']) if 'Category' in df.columns else 0
-                count_new = len(df[df['Category'] == 'Dalab Cusub']) if 'Category' in df.columns else 0
+                count_new = len(df[df['Category'] == 'bahiyaha Dadweynaha']) if 'Category' in df.columns else 0
                 
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Wadarta (Total)", count_total)
@@ -375,3 +375,4 @@ with tab_manager:
                 
         else:
             st.error("Furaha waa khalad (Wrong Password)")
+
