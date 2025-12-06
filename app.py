@@ -11,12 +11,12 @@ st.set_page_config(
 
 # --- IMPORTS ---
 import matplotlib
-matplotlib.use('Agg') 
+matplotlib.use('Agg') # Prevent server crash
 import matplotlib.pyplot as plt
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
-import pytz # NEW: For real timezone handling
+import pytz 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -26,63 +26,63 @@ import random
 
 # --- SET TIMEZONE (SOMALIA/EAST AFRICA) ---
 def get_local_time():
-    # Defines East Africa Time (Somalia)
     tz = pytz.timezone('Africa/Mogadishu') 
     return datetime.now(tz)
 
-# --- CSS: PROFESSIONAL UI THEME ---
+# --- CSS: DARK MODE FRIENDLY & RESPONSIVE ---
 st.markdown("""
 <style>
-    /* Main Background adjustments */
-    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; }
+    /* Global Text & Background Fixes */
+    .block-container { padding-top: 1rem; padding-bottom: 3rem; }
     
-    /* Hide Default Streamlit Elements */
+    /* Hide Streamlit Default Elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Custom Card Style for Metrics */
+    /* METRIC CARDS (Dark Mode Compatible) */
     div[data-testid="stMetric"] {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        padding: 15px;
+        background-color: rgba(255, 255, 255, 0.05); /* Transparent White */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 10px;
         border-radius: 10px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
         text-align: center;
     }
     
-    /* Buttons */
+    /* TABS DESIGN (Fixed for Mobile Dark Mode) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: rgba(255, 255, 255, 0.05); /* Dark Transparent */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 5px;
+        color: #e0e0e0; /* Light Text */
+        font-weight: 600;
+    }
+    
+    /* Selected Tab - Brand Red */
+    .stTabs [aria-selected="true"] {
+        background-color: #8B0000 !important;
+        color: white !important;
+        border: 1px solid #8B0000;
+    }
+
+    /* INPUT FIELDS */
+    .stTextInput input, .stSelectbox div[data-baseweb="select"] {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        color: white !important;
+        border: 1px solid #444 !important;
+    }
+
+    /* BUTTONS */
     div[data-testid="stButton"] button {
         border-radius: 8px;
         font-weight: bold;
         transition: 0.3s;
-    }
-    
-    /* Submit Button Color */
-    button[kind="secondary"] {
-        border-color: #8B0000;
-        color: #8B0000;
-    }
-    button[kind="secondary"]:hover {
-        background-color: #8B0000;
-        color: white !important;
-    }
-    
-    /* Tabs Design */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #fff;
-        border-radius: 5px;
-        padding: 10px 20px;
-        box-shadow: 0px 1px 3px rgba(0,0,0,0.1);
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #8B0000 !important;
-        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -99,12 +99,10 @@ except Exception as e:
 
 def generate_excel(df):
     output = io.BytesIO()
-    # Add the download timestamp to the filename logic later
     try:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Warbixin')
             worksheet = writer.sheets['Warbixin']
-            # Auto-adjust column width
             for i, col in enumerate(df.columns):
                 max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 2
                 col_letter = chr(65 + i)
@@ -120,79 +118,103 @@ def generate_pdf(df):
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
-    # --- COLORS ---
+    # COLORS
     brand_red = colors.HexColor("#8B0000") 
     brand_dark = colors.HexColor("#1A1A1A")
     light_grey = colors.HexColor("#F0F0F0")
     
-    # --- HEADER DESIGN ---
-    # Top Banner
+    # --- HEADER ---
     c.setFillColor(brand_red)
     c.rect(0, height-110, width, 110, fill=1, stroke=0)
     
-    # Title
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 28)
     c.drawString(30, height-50, "MAREERO SYSTEM")
-    
     c.setFont("Helvetica", 12)
     c.drawString(30, height-70, "General Trading & Spare Parts")
     
-    # Report Info (Right Side)
     current_time = get_local_time()
     report_id = f"RPT-{current_time.strftime('%Y%m%d')}-{random.randint(100,999)}"
     
-    c.setFont("Helvetica-Bold", 12)
-    c.drawRightString(width-30, height-40, "DAILY OPERATION REPORT")
+    c.drawRightString(width-30, height-40, "DAILY REPORT")
     c.setFont("Helvetica", 10)
     c.drawRightString(width-30, height-55, f"Date: {current_time.strftime('%d-%b-%Y')}")
     c.drawRightString(width-30, height-70, f"Time: {current_time.strftime('%I:%M %p')}")
     c.drawRightString(width-30, height-85, f"ID: {report_id}")
 
-    # --- SUMMARY METRICS SECTION ---
-    y_summary = height - 150
+    # --- METRICS ---
+    y_pos = height - 150
     c.setFillColor(brand_dark)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(30, y_summary, "1. EXECUTIVE SUMMARY (Koobitaan)")
+    c.drawString(30, y_pos, "1. EXECUTIVE SUMMARY")
     
     total = len(df)
     missing = len(df[df['Category'] == 'Maqan']) if not df.empty else 0
-    requests = len(df[df['Category'] == 'Dadweynaha']) if not df.empty else 0 # Corrected mapping
+    requests = len(df[df['Category'] == 'Dadweynaha']) if not df.empty else 0
     
-    # Draw 3 Boxes
-    box_w = 170
-    box_h = 50
-    gap = 15
+    metrics = [("Total Entries", str(total)), ("Missing Items", str(missing)), ("Requests", str(requests))]
+    box_w, box_h, gap = 170, 50, 15
     start_x = 30
-    
-    metrics = [("Total Entries", str(total)), ("Items Missing", str(missing)), ("New Requests", str(requests))]
     
     for i, (label, value) in enumerate(metrics):
         x = start_x + (i * (box_w + gap))
-        # Box background
         c.setFillColor(colors.white)
         c.setStrokeColor(colors.lightgrey)
-        c.roundRect(x, y_summary-60, box_w, box_h, 8, fill=1, stroke=1)
-        # Text
+        c.roundRect(x, y_pos-60, box_w, box_h, 8, fill=1, stroke=1)
         c.setFillColor(brand_red)
         c.setFont("Helvetica-Bold", 18)
-        c.drawCentredString(x + box_w/2, y_summary-35, value)
+        c.drawCentredString(x + box_w/2, y_pos-35, value)
         c.setFillColor(colors.grey)
         c.setFont("Helvetica", 10)
-        c.drawCentredString(x + box_w/2, y_summary-50, label)
+        c.drawCentredString(x + box_w/2, y_pos-50, label)
 
-    # --- DATA TABLE SECTION ---
-    y_table = y_summary - 100
+    # --- CHARTS SECTION (Added Back) ---
+    y_pos -= 80
     c.setFillColor(brand_dark)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(30, y_table, "2. DETAILED LIST (Liiska Faahfaahsan)")
+    c.drawString(30, y_pos, "2. DATA VISUALIZATION")
     
-    # Table Header Settings
-    y_curr = y_table - 30
-    col_widths = [80, 160, 80, 80, 140] # Category, Item, Branch, Employee, Note
+    if not df.empty:
+        try:
+            # Pie Chart (Categories)
+            fig1, ax1 = plt.subplots(figsize=(4, 3))
+            cat_counts = df['Category'].value_counts()
+            ax1.pie(cat_counts, labels=cat_counts.index, autopct='%1.0f%%', startangle=90, colors=['#8B0000', '#2F4F4F', '#A9A9A9'])
+            ax1.set_title("Categories", fontsize=10)
+            
+            img1 = io.BytesIO()
+            plt.savefig(img1, format='png', bbox_inches='tight', transparent=True)
+            img1.seek(0)
+            c.drawImage(ImageReader(img1), 30, y_pos-220, width=240, height=180)
+            plt.close(fig1)
+
+            # Bar Chart (Branches)
+            fig2, ax2 = plt.subplots(figsize=(4, 3))
+            branch_counts = df['Branch'].value_counts()
+            branch_counts.plot(kind='bar', color='#8B0000', ax=ax2)
+            ax2.set_title("Activity by Branch", fontsize=10)
+            plt.xticks(rotation=45, ha='right', fontsize=8)
+            
+            img2 = io.BytesIO()
+            plt.savefig(img2, format='png', bbox_inches='tight', transparent=True)
+            img2.seek(0)
+            c.drawImage(ImageReader(img2), 300, y_pos-220, width=240, height=180)
+            plt.close(fig2)
+            
+        except Exception as e:
+            c.drawString(30, y_pos-30, "Charts unavailable.")
+    
+    # --- TABLE SECTION ---
+    y_pos -= 240
+    c.setFillColor(brand_dark)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(30, y_pos, "3. DETAILED INVENTORY LIST")
+    
+    # Header
+    y_curr = y_pos - 30
+    col_widths = [80, 160, 80, 80, 140]
     headers = ["CATEGORY", "ITEM NAME", "BRANCH", "STAFF", "NOTE"]
     
-    # Draw Header Row
     c.setFillColor(brand_red)
     c.rect(30, y_curr-5, sum(col_widths), 20, fill=1, stroke=0)
     c.setFillColor(colors.white)
@@ -205,35 +227,34 @@ def generate_pdf(df):
         
     y_curr -= 20
     
-    # Draw Data Rows
+    # Rows
     c.setFont("Helvetica", 9)
     row_count = 0
     
     if not df.empty:
-        # Sort to show 'Maqan' first for priority
-        if 'Category' in df.columns:
-            df['sort_val'] = df['Category'].apply(lambda x: 0 if x == 'Maqan' else 1)
-            df = df.sort_values('sort_val').drop(columns=['sort_val'])
+        # SORTING: Sort by Item Name so same items appear together
+        if 'Item' in df.columns:
+            df = df.sort_values(by=['Item', 'Category'])
             
         for _, row in df.iterrows():
-            # Alternating background color
             if row_count % 2 == 0:
                 c.setFillColor(light_grey)
                 c.rect(30, y_curr-5, sum(col_widths), 15, fill=1, stroke=0)
             
-            # Check for critical items to highlight text
-            is_critical = row.get('Category', '') == 'Maqan'
-            c.setFillColor(brand_red if is_critical else colors.black)
+            # HIGHLIGHT LOGIC: Red for "Maqan"
+            is_missing = row.get('Category', '') == 'Maqan'
+            c.setFillColor(brand_red if is_missing else colors.black)
             
-            x_pos = 35
+            # Data
             vals = [
                 str(row.get('Category', ''))[:15],
-                str(row.get('Item', ''))[:28],
+                str(row.get('Item', ''))[:28], # Item Name
                 str(row.get('Branch', '')).replace("Branch", "Br."),
                 str(row.get('Employee', ''))[:12],
                 str(row.get('Note', ''))[:25]
             ]
             
+            x_pos = 35
             for i, val in enumerate(vals):
                 c.drawString(x_pos, y_curr, val)
                 x_pos += col_widths[i]
@@ -241,13 +262,11 @@ def generate_pdf(df):
             y_curr -= 18
             row_count += 1
             
-            # Page Break if full
-            if y_curr < 120:
+            if y_curr < 50:
                 c.showPage()
                 y_curr = height - 50
 
-    # --- FOOTER & SIGNATURE ---
-    # Only draw signature on the last page or if there is space
+    # Signature
     if y_curr < 120:
         c.showPage()
         y_curr = height - 100
@@ -262,87 +281,73 @@ def generate_pdf(df):
     c.drawString(40, y_sig-15, "Manager Signature")
     c.drawString(350, y_sig-15, "Date & Stamp")
     
-    # Bottom Strip
-    c.setFillColor(light_grey)
-    c.rect(0, 0, width, 30, fill=1, stroke=0)
-    c.setFillColor(colors.grey)
-    c.setFont("Helvetica", 8)
-    c.drawCentredString(width/2, 10, f"Generated by Mareero System | {current_time.strftime('%Y-%m-%d')}")
-
     c.save()
     buffer.seek(0)
     return buffer
 
-# --- 3. THE APP UI ---
-# Banner
+# --- 3. APP UI ---
 st.markdown("<h1 style='text-align: center; color: #8B0000;'>🏢 Mareero General Trading LLC</h1>", unsafe_allow_html=True)
 st.markdown(f"<p style='text-align: center; color: gray;'>System Date: {get_local_time().strftime('%d %B %Y | %I:%M %p')}</p>", unsafe_allow_html=True)
 
-# Tabs
+# TABS
 tab_staff, tab_manager = st.tabs(["📝 SHAQAALAHA (Staff)", "🔐 MAAMULKA (Manager)"])
 
 # --- STAFF TAB ---
 with tab_staff:
-    st.markdown("### 📋 Diiwaangelinta Maalinlaha (Daily Entry)")
+    st.info("Fadlan halkan ku diiwaangeli warbixintaada maalinlaha ah.")
     
-    with st.container(border=True):
-        with st.form("log_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                branch_options = ["Head Q", "Branch 1", "Branch 3", "Branch 4", "Branch 5" , "Kaydka M.hassan"]
-                branch = st.selectbox("📍 Xulo Laanta (Select Branch)", branch_options)
-                employee = st.text_input("👤 Magacaaga (Your Name)")
-            
-            with col2:
-                # Kept your exact mapping logic
-                cat_map = {
-                    "alaabta Maqan (Missing)": "Maqan",
-                    "alaabta Suqqa leh (High Demand)": "Suuq leh",
-                    "bahiyaha Dadweynaha (New Request)": "Dadweynaha"
-                }
-                category_selection = st.selectbox("📂 Nooca Warbixinta (Type)", list(cat_map.keys()))
-                item = st.text_input("📦 Magaca Alaabta (Item Name)")
-            
-            note = st.text_input("📝 Faahfaahin / Tirada (Note/Qty)")
-            
-            st.write("")
-            submit_btn = st.form_submit_button("🚀 GUDBI (SUBMIT REPORT)", use_container_width=True)
-            
-            if submit_btn:
-                if employee and item:
-                    try:
-                        data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
-                        if data is None: data = pd.DataFrame()
-                        data = data.dropna(how="all")
-                        
-                        real_category = cat_map[category_selection]
-                        # Use Local Time for the database entry too
-                        current_local_time = get_local_time().strftime("%Y-%m-%d %H:%M")
-                        
-                        new_row = pd.DataFrame([{
-                            "Date": current_local_time,
-                            "Branch": branch,
-                            "Employee": employee,
-                            "Category": real_category,
-                            "Item": item,
-                            "Note": note
-                        }])
-                        
-                        updated = pd.concat([data, new_row], ignore_index=True)
-                        conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated)
-                        st.cache_data.clear()
-                        st.success(f"✅ Waa la gudbiyay! {current_local_time}")
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-                else:
-                    st.warning("⚠️ Fadlan buuxi Magacaaga iyo Alaabta.")
+    with st.form("log_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            branch_options = ["Head Q", "Branch 1", "Branch 3", "Branch 4", "Branch 5" , "Kaydka M.hassan"]
+            branch = st.selectbox("📍 Xulo Laanta (Select Branch)", branch_options)
+            employee = st.text_input("👤 Magacaaga (Your Name)")
+        with col2:
+            cat_map = {
+                "alaabta Maqan (Missing)": "Maqan",
+                "alaabta Suqqa leh (High Demand)": "Suuq leh",
+                "bahiyaha Dadweynaha (New Request)": "Dadweynaha"
+            }
+            category_selection = st.selectbox("📂 Nooca Warbixinta (Type)", list(cat_map.keys()))
+            item = st.text_input("📦 Magaca Alaabta (Item Name)")
+        
+        note = st.text_input("📝 Faahfaahin / Tirada (Note/Qty)")
+        
+        # Spacer
+        st.write("")
+        submit_btn = st.form_submit_button("🚀 GUDBI (SUBMIT)", use_container_width=True)
+        
+        if submit_btn:
+            if employee and item:
+                try:
+                    data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
+                    if data is None: data = pd.DataFrame()
+                    data = data.dropna(how="all")
+                    
+                    real_category = cat_map[category_selection]
+                    current_local_time = get_local_time().strftime("%Y-%m-%d %H:%M")
+                    
+                    new_row = pd.DataFrame([{
+                        "Date": current_local_time,
+                        "Branch": branch,
+                        "Employee": employee,
+                        "Category": real_category,
+                        "Item": item,
+                        "Note": note
+                    }])
+                    
+                    updated = pd.concat([data, new_row], ignore_index=True)
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated)
+                    st.cache_data.clear()
+                    st.success(f"✅ Waa la gudbiyay! {current_local_time}")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+            else:
+                st.warning("⚠️ Fadlan buuxi Magacaaga iyo Alaabta.")
 
 # --- MANAGER TAB ---
 with tab_manager:
-    st.markdown("### 🔐 Maamulka (Admin Panel)")
-    
-    # Styled Login
+    # LOGIN
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
@@ -358,13 +363,16 @@ with tab_manager:
                 else:
                     st.error("Wrong Password")
     
-    # LOGGED IN VIEW
+    # DASHBOARD
     if st.session_state.logged_in:
-        if st.button("🔓 Logout", type="secondary"):
-            st.session_state.logged_in = False
-            st.rerun()
+        c_head, c_logout = st.columns([4,1])
+        with c_head:
+            st.subheader("📊 Maamulka Dashboard")
+        with c_logout:
+            if st.button("🔓 Logout"):
+                st.session_state.logged_in = False
+                st.rerun()
             
-        # Load Data
         try:
             df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
             if df is None: df = pd.DataFrame()
@@ -373,7 +381,6 @@ with tab_manager:
             df = pd.DataFrame()
 
         if not df.empty:
-            # DASHBOARD METRICS
             st.markdown("---")
             m1, m2, m3, m4 = st.columns(4)
             
@@ -381,30 +388,24 @@ with tab_manager:
             count_missing = len(df[df['Category'] == 'Maqan']) if 'Category' in df.columns else 0
             count_new = len(df[df['Category'] == 'Dadweynaha']) if 'Category' in df.columns else 0
             
-            # Dynamic greeting based on time
-            hour = get_local_time().hour
-            greeting = "Good Morning" if hour < 12 else "Good Afternoon"
-            
-            m1.metric("Status", "Active 🟢")
-            m2.metric("Total Reports", count_total)
-            m3.metric("⚠️ Missing Items", count_missing, delta_color="inverse")
-            m4.metric("📢 New Requests", count_new)
+            m1.metric("Total", count_total)
+            m2.metric("Missing", count_missing, delta_color="inverse")
+            m3.metric("Requests", count_new)
+            m4.metric("Branches", df['Branch'].nunique() if 'Branch' in df.columns else 0)
             
             st.markdown("---")
             
-            # REPORT GENERATION SECTION
-            st.subheader("📄 Report Generation Center")
-            
-            c_pdf, c_xls = st.columns(2)
-            with c_pdf:
+            # REPORTS
+            c1, c2 = st.columns(2)
+            with c1:
                 st.download_button(
-                    label="📥 Download Professional PDF",
+                    label="📥 Download PDF Report (With Charts)",
                     data=generate_pdf(df),
                     file_name=f"Mareero_Report_{get_local_time().strftime('%Y-%m-%d')}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
-            with c_xls:
+            with c2:
                 st.download_button(
                     label="📥 Download Excel Data",
                     data=generate_excel(df),
@@ -415,7 +416,7 @@ with tab_manager:
 
             st.markdown("---")
 
-            # EDIT/DELETE SECTION
+            # EDIT TABLE
             with st.expander("🛠️ Manage Data (Edit / Delete Rows)", expanded=False):
                 df_with_delete = df.copy()
                 df_with_delete.insert(0, "Select", False)
@@ -426,9 +427,7 @@ with tab_manager:
                     hide_index=True,
                     use_container_width=True,
                     key="data_editor",
-                    column_config={
-                        "Select": st.column_config.CheckboxColumn("❌", width="small")
-                    }
+                    column_config={"Select": st.column_config.CheckboxColumn("❌", width="small")}
                 )
                 
                 col_save, col_del = st.columns([1,1])
@@ -438,11 +437,10 @@ with tab_manager:
                             final_df = edited_df.drop(columns=["Select"])
                             conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
                             st.cache_data.clear()
-                            st.success("Data Updated!")
+                            st.success("Updated!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error: {e}")
-                
+                            st.error(str(e))
                 with col_del:
                     if st.button("🗑️ Delete Selected", type="primary", use_container_width=True):
                         try:
@@ -450,9 +448,9 @@ with tab_manager:
                             final_df = rows_to_keep.drop(columns=["Select"])
                             conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
                             st.cache_data.clear()
-                            st.success("Rows Deleted!")
+                            st.success("Deleted!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error: {e}")
+                            st.error(str(e))
         else:
-            st.info("No data available yet.")
+            st.info("No data found.")
