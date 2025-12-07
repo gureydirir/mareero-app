@@ -132,7 +132,7 @@ def generate_pdf(df):
     c.setFont("Helvetica-Bold", 24)
     c.drawString(40, height-50, "MAREERO SYSTEM")
     c.setFont("Helvetica", 12)
-    c.drawString(40, height-70, "General Trading & Spare Parts LLC")
+    c.drawString(40, height-70, "General Trading LLC")
     
     # Time
     current_time = get_local_time()
@@ -472,3 +472,4 @@ with tab_manager:
 
         else:
             st.info("No data found.")
+
