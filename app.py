@@ -38,10 +38,7 @@ st.markdown("""
     header {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* 2. Responsive Backgrounds & Text */
-    /* We do NOT force white background. Streamlit will auto-switch to Dark/Light */
-    
-    /* 3. Input Fields - Adapt to Dark/Light Mode automatically */
+    /* 2. Responsive Inputs */
     .stTextInput input, .stSelectbox div[data-baseweb="select"] {
         background-color: var(--secondary-background-color) !important;
         color: var(--text-color) !important;
@@ -49,15 +46,15 @@ st.markdown("""
         border: 1px solid rgba(128, 128, 128, 0.2);
     }
     
-    /* 4. Metric Cards - Responsive */
+    /* 3. Metric Cards */
     div[data-testid="stMetric"] {
-        background-color: var(--secondary-background-color); /* Auto-switch */
+        background-color: var(--secondary-background-color);
         border: 1px solid rgba(128, 128, 128, 0.2);
         padding: 15px;
         border-radius: 8px;
     }
     
-    /* 5. BRANDING: Buttons (Navy Blue - Visible in both modes) */
+    /* 4. BRANDING: Buttons (Navy Blue) */
     div[data-testid="stButton"] button {
         background-color: #1E3A8A; /* Navy Blue */
         color: white;
@@ -70,16 +67,15 @@ st.markdown("""
         color: white;
     }
     
-    /* 6. BRANDING: Tabs (Navy Blue Selection) */
+    /* 5. Tabs */
     .stTabs [aria-selected="true"] {
         background-color: #1E3A8A !important;
         color: white !important;
     }
     
-    /* 7. Headers (Responsive Color) */
+    /* 6. Headers */
     h1, h2, h3 {
         text-align: center;
-        /* No fixed color - allows white text in Dark Mode and black in Light Mode */
     }
 </style>
 """, unsafe_allow_html=True)
@@ -114,15 +110,15 @@ def generate_excel(df):
     output.seek(0)
     return output
 
-# --- 5. PDF ENGINE (PERFECT ALIGNMENT & GRID) ---
+# --- 5. PDF ENGINE (FIXED PAGE 2 & NAME CHANGE) ---
 def generate_pdf(df):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
     # Colors
-    header_bg = colors.HexColor("#1E3A8A") # Navy Blue Header
-    line_color = colors.HexColor("#dcdcdc") # Grey Grid Lines
+    header_bg = colors.HexColor("#1E3A8A") # Navy Blue
+    line_color = colors.HexColor("#dcdcdc") # Grey Grid
     
     # --- HEADER ---
     c.setFillColor(header_bg)
@@ -132,7 +128,7 @@ def generate_pdf(df):
     c.setFont("Helvetica-Bold", 24)
     c.drawString(40, height-50, "MAREERO SYSTEM")
     c.setFont("Helvetica", 12)
-    c.drawString(40, height-70, "General Trading LLC")
+    c.drawString(40, height-70, "General Trading & Spare Parts LLC")
     
     # Time
     current_time = get_local_time()
@@ -148,13 +144,14 @@ def generate_pdf(df):
     c.drawString(40, y_pos, "1. KOOBITAAN (SUMMARY)")
     
     total = len(df)
-    missing = len(df[df['Category'] == 'alaabta Maqan']) if not df.empty else 0
+    # UPDATED NAME HERE
+    missing = len(df[df['Category'] == 'Alaabta go\'an']) if not df.empty else 0
     requests = len(df[df['Category'] == 'bahiyaha Dadweynaha']) if not df.empty else 0
     
     # Boxes
     box_w, box_h = 160, 50
     start_x = 40
-    metrics = [("Total Reports", str(total)), ("Maqan", str(missing)), ("Requests", str(requests))]
+    metrics = [("Total Reports", str(total)), ("Alaabta go'an", str(missing)), ("Requests", str(requests))]
     
     for i, (label, value) in enumerate(metrics):
         x = start_x + (i * 175)
@@ -199,28 +196,30 @@ def generate_pdf(df):
         except:
             pass
 
-    # --- TABLE (FIXED WIDTHS & GRID) ---
+    # --- TABLE (FIXED PAGE 2 ISSUE) ---
     y_pos -= 240
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 14)
     c.drawString(40, y_pos, "3. LIISKA FAAHFAAHSAN (DETAILS)")
     
     y_curr = y_pos - 30
-    # Adjusted Widths: Increased Branch to 100 to fit "Kaydka M.Hassan"
-    col_widths = [80, 140, 100, 85, 110] 
+    # Adjusted Widths so they don't overlap
+    col_widths = [80, 135, 105, 85, 110] 
     headers = ["TYPE", "ITEM NAME", "BRANCH", "STAFF", "NOTES"]
     
-    # Header Bar
-    c.setFillColor(header_bg)
-    c.rect(40, y_curr-6, sum(col_widths), 22, fill=1, stroke=0)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 9)
-    
-    x_pos = 45
-    for i, h in enumerate(headers):
-        c.drawString(x_pos, y_curr+2, h)
-        x_pos += col_widths[i]
-        
+    # Helper to draw header
+    def draw_header(y):
+        c.setFillColor(header_bg)
+        c.rect(40, y-6, sum(col_widths), 22, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 9)
+        xp = 45
+        for i, h in enumerate(headers):
+            c.drawString(xp, y+2, h)
+            xp += col_widths[i]
+
+    # Draw first header
+    draw_header(y_curr)
     y_curr -= 22
     c.setFont("Helvetica", 9)
     
@@ -234,9 +233,9 @@ def generate_pdf(df):
                 c.setFillColor(colors.HexColor("#f1f5f9"))
                 c.rect(40, y_curr-6, sum(col_widths), 18, fill=1, stroke=0)
             
-            # Color Logic
+            # Color Logic - UPDATED NAME "go'an"
             cat = str(row.get('Category', ''))
-            if 'Maqan' in cat: c.setFillColor(colors.red)
+            if "go'an" in cat or "Maqan" in cat: c.setFillColor(colors.red)
             elif 'Dadweynaha' in cat: c.setFillColor(colors.blue)
             else: c.setFillColor(colors.black)
             
@@ -254,19 +253,22 @@ def generate_pdf(df):
             
             for i, val in enumerate(vals):
                 c.drawString(x_pos, y_curr, val)
-                # Draw Vertical Grid Line
                 c.line(x_pos + col_widths[i] - 5, y_curr-5, x_pos + col_widths[i] - 5, y_curr+12)
                 x_pos += col_widths[i]
             
-            # Horizontal Line below row
             c.line(40, y_curr-6, 40+sum(col_widths), y_curr-6)
             
             y_curr -= 18
             row_count += 1
             
+            # PAGE BREAK FIX
             if y_curr < 60:
                 c.showPage()
                 y_curr = height - 50
+                # Redraw header on new page so text is clean
+                draw_header(y_curr)
+                y_curr -= 22
+                c.setFont("Helvetica", 9)
 
     # --- SIGNATURE ---
     if y_curr < 80:
@@ -290,7 +292,7 @@ def generate_pdf(df):
     return buffer
 
 # --- 6. APP UI ---
-st.markdown("<h1 style='text-align: center;'>🏢 Mareero General Trading LLC</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏢 Mareero General Trading LLC</h1>", unsafe_allow_html=True)
 
 tab_staff, tab_manager = st.tabs(["📝 Qeybta Shaqaalaha (Staff)", "🔐 Maamulka (Manager)"])
 
@@ -305,9 +307,10 @@ with tab_staff:
             branch = st.selectbox("📍 Xulo Laanta (Select Branch)", branch_options)
             employee = st.text_input("👤 Magacaaga (Your Name)")
         with c2:
+            # UPDATED MAPPING HERE
             cat_map = {
-                "alaabta Maqan (Missing)": "alaabta Maqan",
-                "alaabta Suqqa leh (High Demand)": "alaabta Suuqa leh",
+                "Alaabta go'an (Missing)": "Alaabta go'an",
+                "alaabta Suuqa leh (High Demand)": "alaabta Suuqa leh",
                 "bahiyaha Dadweynaha (New Request)": "bahiyaha Dadweynaha"
             }
             category_selection = st.selectbox("📂 Nooca Warbixinta (Type)", list(cat_map.keys()))
@@ -318,7 +321,6 @@ with tab_staff:
         if st.form_submit_button("🚀 Gudbi (Submit)", use_container_width=True):
             if employee and item:
                 try:
-                    # FIX: Changed ttl from 0 to 5 to prevent Quota Error
                     data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=5)
                     if data is None: data = pd.DataFrame()
                     data = data.dropna(how="all")
@@ -372,7 +374,6 @@ with tab_manager:
                 st.rerun()
         
         try:
-            # FIX: Changed ttl to 5 to avoid Quota Limits
             df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=5)
             if df is None: df = pd.DataFrame()
             df = df.dropna(how="all")
@@ -382,12 +383,13 @@ with tab_manager:
         if not df.empty:
             st.markdown("---")
             count_total = len(df)
-            count_missing = len(df[df['Category'] == 'alaabta Maqan']) if 'Category' in df.columns else 0
+            # UPDATED METRICS HERE
+            count_missing = len(df[df['Category'] == 'Alaabta go\'an']) if 'Category' in df.columns else 0
             count_new = len(df[df['Category'] == 'bahiyaha Dadweynaha']) if 'Category' in df.columns else 0
             
             m1, m2, m3 = st.columns(3)
             m1.metric("Wadarta (Total)", count_total)
-            m2.metric("Maqan", count_missing, delta_color="inverse")
+            m2.metric("Alaabta go'an", count_missing, delta_color="inverse")
             m3.metric("Dalab", count_new)
             
             st.markdown("---")
@@ -472,4 +474,3 @@ with tab_manager:
 
         else:
             st.info("No data found.")
-
