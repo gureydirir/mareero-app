@@ -277,10 +277,15 @@ def generate_pdf(df):
 
 st.markdown("""
 <div style="text-align: center; margin-bottom: 20px;">
-    <h1 style='color: #3b82f6; margin:0;'>MAREERO SYSTEM</h1>
-    <p style='color: #94a3b8;'>General Trading & Spare Parts LLC</p>
+    <h1 style='color: #3b82f6; margin:0;'>MAREERO GENERAL</h1>
+    <p style='color: #94a3b8;'>Trading LLC</p>
 </div>
 """, unsafe_allow_html=True)
+st.markdown(f"<p style='text-align:
+center; color: gray;'>System Date:
+{get_local_time().strftime('%d %B %Y | %I :%M %p')}</p>", 
+unsafe allow html=True)
+
 
 # Tabs
 tab_staff, tab_manager = st.tabs(["📝 SHAQAALAHA (Staff)", "🔐 MAAMULKA (Manager)"])
@@ -410,7 +415,10 @@ with tab_manager:
 
             st.markdown("---")
 
-            # EDIT TABLE
+            
+                    # ... (Inside Manager Tab) ...
+
+            # EDIT TABLE SECTION
             with st.expander("🛠️ Wax ka bedel / Tirtir (Edit/Delete)", expanded=False):
                 df_with_delete = df.copy()
                 df_with_delete.insert(0, "Select", False)
@@ -424,7 +432,13 @@ with tab_manager:
                     column_config={"Select": st.column_config.CheckboxColumn("❌", width="small")}
                 )
                 
+                # Initialize confirmation state
+                if "confirm_delete" not in st.session_state:
+                    st.session_state.confirm_delete = False
+
                 col_save, col_del = st.columns([1,1])
+                
+                # SAVE BUTTON
                 with col_save:
                     if st.button("💾 Kaydi (Save)", use_container_width=True):
                         try:
@@ -435,16 +449,35 @@ with tab_manager:
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))
+                
+                # DELETE BUTTON (Triggers Confirmation)
                 with col_del:
                     if st.button("🗑️ Tirtir (Delete)", type="primary", use_container_width=True):
-                        try:
-                            rows_to_keep = edited_df[edited_df["Select"] == False]
-                            final_df = rows_to_keep.drop(columns=["Select"])
-                            conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
-                            st.cache_data.clear()
-                            st.success("✅ Waa la tirtiray!")
+                        # Check if any row is selected
+                        if edited_df["Select"].any():
+                            st.session_state.confirm_delete = True
+                        else:
+                            st.warning("⚠️ Fadlan xulo safafka aad rabto inaad tirtirto (Select rows first).")
+
+                # CONFIRMATION BOX (Only shows if Delete was clicked)
+                if st.session_state.confirm_delete:
+                    st.warning("⚠️ Ma hubtaa inaad tirtirto xogtan? (Are you sure you want to delete?)", icon="⚠️")
+                    
+                    c_yes, c_no = st.columns(2)
+                    with c_yes:
+                        if st.button("✅ Haa, Tirtir (Yes)", type="primary", use_container_width=True):
+                            try:
+                                rows_to_keep = edited_df[edited_df["Select"] == False]
+                                final_df = rows_to_keep.drop(columns=["Select"])
+                                conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
+                                st.cache_data.clear()
+                                st.session_state.confirm_delete = False # Reset
+                                st.success("✅ Waa la tirtiray! (Deleted)")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(str(e))
+                    
+                    with c_no:
+                        if st.button("❌ Maya (Cancel)", use_container_width=True):
+                            st.session_state.confirm_delete = False
                             st.rerun()
-                        except Exception as e:
-                            st.error(str(e))
-        else:
-            st.info("No data found.")
