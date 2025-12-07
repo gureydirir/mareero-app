@@ -437,67 +437,85 @@ with tab_manager:
                 st.warning("⚠️ No data matches your search/filter.")
 
             st.markdown("---")
-
-            # --- EDIT/DELETE TABLE ---
+            # --- SMOOTH BATCH DELETE SECTION ---
             with st.expander("🛠️ Wax ka bedel / Tirtir (Edit/Delete)", expanded=True):
                 if not filtered_df.empty:
+                    # Prepare Data
                     df_with_delete = filtered_df.copy()
                     df_with_delete.insert(0, "Select", False)
 
-                    edited_df = st.data_editor(
-                        df_with_delete,
-                        num_rows="fixed",
-                        hide_index=True,
-                        use_container_width=True,
-                        key="data_editor",
-                        column_config={"Select": st.column_config.CheckboxColumn("❌", width="small")}
-                    )
+                    # 🔴 START FORM: This prevents the app from loading on every click
+                    with st.form("delete_form"):
+                        st.write("Select rows to edit or delete below:")
+                        
+                        edited_df = st.data_editor(
+                            df_with_delete,
+                            num_rows="fixed",
+                            hide_index=True,
+                            use_container_width=True,
+                            key="data_editor",
+                            column_config={
+                                "Select": st.column_config.CheckboxColumn("❌", width="small")
+                            }
+                        )
+                        
+                        c1, c2 = st.columns([1,1])
+                        with c1:
+                            # Button 1: Save Changes (Edits)
+                            save_btn = st.form_submit_button("💾 Kaydi Isbedelka (Save)")
+                        with c2:
+                            # Button 2: Trigger Delete Logic
+                            delete_btn = st.form_submit_button("🗑️ Diyaari Tirtiridda (Prepare Delete)")
+                    # 🔴 END FORM
+
+                    # --- LOGIC HANDLER (Runs only after button click) ---
                     
-                    if "confirm_delete" not in st.session_state:
-                        st.session_state.confirm_delete = False
-                    
-                    c_save, c_del = st.columns([1,1])
-                    
-                    with c_save:
-                        if st.button("💾 Kaydi Isbedelka", use_container_width=True):
-                            try:
-                                final_df = edited_df.drop(columns=["Select"])
-                                conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
-                                st.cache_data.clear()
-                                st.success("✅ Saved!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(str(e))
-                    
-                    with c_del:
-                        if st.button("🗑️ Tirtir", type="primary", use_container_width=True):
-                            if edited_df["Select"].any():
-                                st.session_state.confirm_delete = True
-                            else:
-                                st.warning("⚠️ Select rows first")
-                    
-                    if st.session_state.confirm_delete:
+                    # 1. Handle Save
+                    if save_btn:
+                        try:
+                            final_df = edited_df.drop(columns=["Select"])
+                            conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
+                            st.cache_data.clear()
+                            st.success("✅ Saved Successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+
+                    # 2. Handle Delete Request
+                    if delete_btn:
+                        if edited_df["Select"].any():
+                            st.session_state.confirm_delete = True
+                        else:
+                            st.warning("⚠️ Fadlan xulo safafka (Please select rows first).")
+
+                    # 3. Confirmation Box (Outside the form for safety)
+                    if st.session_state.get("confirm_delete", False):
                         st.warning("⚠️ Ma hubtaa inaad tirtirto? (Are you sure?)")
-                        cy, cn = st.columns(2)
-                        with cy:
-                            if st.button("✅ Haa", type="primary", use_container_width=True):
+                        col_yes, col_no = st.columns(2)
+                        
+                        with col_yes:
+                            if st.button("✅ Haa (Yes, Delete)", type="primary", use_container_width=True):
                                 try:
+                                    # Filter out selected rows
                                     rows_to_keep = edited_df[edited_df["Select"] == False]
                                     final_df = rows_to_keep.drop(columns=["Select"])
+                                    
+                                    # Update Google Sheet
                                     conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
+                                    
+                                    # Reset State
                                     st.cache_data.clear()
                                     st.session_state.confirm_delete = False
-                                    st.success("Deleted!")
+                                    st.success("✅ Deleted Successfully!")
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(str(e))
-                        with cn:
-                            if st.button("❌ Maya", use_container_width=True):
+                                    st.error(f"Error: {e}")
+                        
+                        with col_no:
+                            if st.button("❌ Maya (Cancel)", use_container_width=True):
                                 st.session_state.confirm_delete = False
                                 st.rerun()
                 else:
                     st.info("No data found for this filter.")
 
-        else:
-            st.info("No data found.")
-
+            
