@@ -29,13 +29,18 @@ def get_local_time():
     tz = pytz.timezone('Africa/Mogadishu') 
     return datetime.now(tz)
 
-# --- CSS: PROFESSIONAL THEME (FORCED DARK MODE COMPATIBILITY) ---
-# This CSS forces dark backgrounds on containers so white text is always visible
+# --- CSS: PROFESSIONAL THEME (RESPONSIVE FIX) ---
 st.markdown("""
 <style>
-    /* FORCE MAIN BACKGROUND */
+    /* FORCE DARK THEME SETTINGS */
+    :root {
+        color-scheme: dark;
+    }
+    
+    /* MAIN BACKGROUND */
     .stApp {
         background-color: #0f172a; /* Dark Navy */
+        color: #f8fafc; /* Force White Text Globally */
     }
     
     /* HIDE DEFAULT MENUS */
@@ -43,16 +48,21 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* INPUT FIELDS - MAKE THEM VISIBLE */
+    /* INPUT FIELDS - FORCE DARK BACKGROUND & WHITE TEXT */
     .stTextInput input, .stSelectbox div[data-baseweb="select"], .stTextArea textarea {
         background-color: #1e293b !important; /* Slate 800 */
         color: white !important;
         border: 1px solid #475569 !important;
     }
     
-    /* TEXT LABEL COLORS */
-    .stMarkdown p, label {
-        color: #e2e8f0 !important; /* Light Grey Text */
+    /* DROPDOWNS POPUP MENU */
+    ul[data-baseweb="menu"] {
+        background-color: #1e293b !important;
+    }
+    
+    /* ALL TEXT LABELS */
+    .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, label {
+        color: #e2e8f0 !important; /* Light Grey */
     }
 
     /* METRIC CARDS */
@@ -61,11 +71,12 @@ st.markdown("""
         border: 1px solid #334155;
         padding: 15px;
         border-radius: 8px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     div[data-testid="stMetricLabel"] { color: #94a3b8 !important; }
     div[data-testid="stMetricValue"] { color: #f8fafc !important; }
 
-    /* TABS */
+    /* TABS DESIGN */
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
         background-color: #1e293b;
@@ -74,8 +85,9 @@ st.markdown("""
         border-radius: 4px;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #3b82f6 !important; /* Professional Blue */
+        background-color: #3b82f6 !important; /* Blue */
         color: white !important;
+        border-color: #3b82f6 !important;
     }
     
     /* BUTTONS */
@@ -83,6 +95,13 @@ st.markdown("""
         border-radius: 6px;
         font-weight: 600;
         border: none;
+    }
+    
+    /* DATAFRAME */
+    div[data-testid="stDataFrame"] {
+        background-color: #1e293b;
+        padding: 10px;
+        border-radius: 8px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -95,7 +114,7 @@ except Exception as e:
     st.error(f"⚠️ Connection Error: {e}")
     st.stop()
 
-# --- 2. EXCEL GENERATION (RESTORED) ---
+# --- 2. EXCEL GENERATION ---
 def clean_text(text):
     if pd.isna(text) or str(text).lower() == 'nan':
         return "-"
@@ -107,7 +126,6 @@ def generate_excel(df):
     try:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_export.to_excel(writer, index=False, sheet_name='Warbixin')
-            # Auto-adjust column width
             worksheet = writer.sheets['Warbixin']
             for i, col in enumerate(df_export.columns):
                 max_len = max(df_export[col].astype(str).map(len).max(), len(str(col))) + 2
@@ -119,13 +137,13 @@ def generate_excel(df):
     output.seek(0)
     return output
 
-# --- 3. PDF GENERATION (FIXED CHARTS) ---
+# --- 3. PDF GENERATION (WITH CATEGORY COLORS) ---
 def generate_pdf(df):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
-    # PDF Colors (Professional Blue/Slate)
+    # PDF Colors
     header_bg = colors.HexColor("#0f172a") # Dark Navy
     text_color = colors.HexColor("#334155")
     
@@ -153,10 +171,10 @@ def generate_pdf(df):
     c.drawString(40, y_pos, "1. KOOBITAAN (SUMMARY)")
     
     total = len(df)
-    missing = len(df[df['Category'] == 'alabaha Maqan']) if not df.empty else 0
+    # Using strict categories for counting
+    missing = len(df[df['Category'] == 'alaabta Maqan']) if not df.empty else 0
     requests = len(df[df['Category'] == 'bahiyaha Dadweynaha']) if not df.empty else 0
     
-    # Summary Boxes
     box_w, box_h, gap = 160, 50, 15
     start_x = 40
     metrics = [("Total Reports", str(total)), ("Alaabta Maqan", str(missing)), ("Requests (Dalab)", str(requests))]
@@ -172,7 +190,7 @@ def generate_pdf(df):
         c.setFont("Helvetica", 10)
         c.drawCentredString(x + box_w/2, y_pos-50, label)
 
-    # --- CHARTS (FIXED FOR PRINTING) ---
+    # --- CHARTS ---
     y_pos -= 80
     c.setFillColor(text_color)
     c.setFont("Helvetica-Bold", 14)
@@ -180,13 +198,14 @@ def generate_pdf(df):
     
     if not df.empty:
         try:
-            # RESET MATPLOTLIB STYLE FOR PDF (White Background, Black Text)
             plt.rcdefaults() 
             
             # Pie Chart
             fig1, ax1 = plt.subplots(figsize=(4, 3))
             cat_counts = df['Category'].value_counts()
-            ax1.pie(cat_counts, labels=cat_counts.index, autopct='%1.0f%%', colors=['#3b82f6', '#94a3b8', '#cbd5e1'])
+            # Custom colors for the specific categories
+            colors_list = ['#ef4444', '#f59e0b', '#3b82f6'] # Red, Amber, Blue
+            ax1.pie(cat_counts, labels=cat_counts.index, autopct='%1.0f%%', colors=colors_list)
             
             img1 = io.BytesIO()
             plt.savefig(img1, format='png', bbox_inches='tight')
@@ -215,10 +234,9 @@ def generate_pdf(df):
     c.setFont("Helvetica-Bold", 14)
     c.drawString(40, y_pos, "3. LIISKA FAAHFAAHSAN (DETAILS)")
     
-    # Table Header
     y_curr = y_pos - 30
-    col_widths = [70, 140, 100, 90, 115] 
-    headers = ["TYPE", "ITEM NAME", "BRANCH", "STAFF", "NOTES"]
+    col_widths = [85, 125, 100, 90, 115] # Adjusted widths
+    headers = ["CATEGORY", "ITEM NAME", "BRANCH", "STAFF", "NOTES"]
     
     c.setFillColor(header_bg)
     c.rect(40, y_curr-6, sum(col_widths), 22, fill=1, stroke=0)
@@ -235,23 +253,30 @@ def generate_pdf(df):
     row_count = 0
     
     if not df.empty:
-        # Sort by Item Name
         if 'Item' in df.columns:
-            df = df.sort_values(by=['Item'])
+            df = df.sort_values(by=['Category', 'Item'])
             
         for _, row in df.iterrows():
             if row_count % 2 == 0:
                 c.setFillColor(colors.HexColor("#f1f5f9"))
                 c.rect(40, y_curr-6, sum(col_widths), 18, fill=1, stroke=0)
             
-            # Highlight Missing Items in Red Text
-            cat = clean_text(row.get('Category', ''))
-            is_missing = cat == 'Maqan'
-            c.setFillColor(colors.red if is_missing else colors.black)
+            # --- COLOR HIGHLIGHTING LOGIC ---
+            cat_val = clean_text(row.get('Category', ''))
+            cat_lower = cat_val.lower()
             
+            if 'maqan' in cat_lower:
+                c.setFillColor(colors.red)       # Red for Maqan
+            elif 'suuqa' in cat_lower:
+                c.setFillColor(colors.HexColor("#d97706")) # Amber/Orange for Suuqa
+            elif 'dadweyn' in cat_lower:
+                c.setFillColor(colors.HexColor("#2563eb")) # Blue for Dadweynaha
+            else:
+                c.setFillColor(colors.black)     # Default Black
+
             vals = [
-                cat[:12],
-                clean_text(row.get('Item', ''))[:24],
+                cat_val[:16],
+                clean_text(row.get('Item', ''))[:22],
                 clean_text(row.get('Branch', '')).replace("Branch", "Br."),
                 clean_text(row.get('Employee', ''))[:14],
                 clean_text(row.get('Note', ''))[:20]
@@ -273,14 +298,9 @@ def generate_pdf(df):
     buffer.seek(0)
     return buffer
 
-# --- 3. APP UI ---
 
-st.markdown("""
-<div style="text-align: center; margin-bottom: 20px;">
-    <h1 style='color: #3b82f6; margin:0;'>MAREERO GENERAL</h1>
-    <p style='color: #94a3b8;'>Trading LLC</p>
-</div>
-""", unsafe_allow_html=True)
+# --- 3. THE APP UI ---
+st.title("🏢 Mareero GeneralTrading LLC")
 
 # Tabs
 tab_staff, tab_manager = st.tabs(["📝 SHAQAALAHA (Staff)", "🔐 MAAMULKA (Manager)"])
@@ -292,14 +312,15 @@ with tab_staff:
     with st.form("log_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            branch_options = ["Head Quater", "Branch 1", "Branch 3", "Branch 4", "Branch 5" , "Kaydka M.hassan"]
+            branch_options = ["Head Q", "Branch 1", "Branch 3", "Branch 4", "Branch 5" , "Kaydka M.hassan"]
             branch = st.selectbox("📍 Xulo Laanta (Select Branch)", branch_options)
             employee = st.text_input("👤 Magacaaga (Your Name)")
         with col2:
+            # STRICT CATEGORIES AS REQUESTED
             cat_map = {
-                "alaabta Maqan (Missing)": "Maqan",
-                "alaabta Suqqa leh (High Demand)": "Suuq leh",
-                "bahiyaha Dadweynaha (New Request)": "Dadweynaha"
+                "alaabta Maqan": "alaabta Maqan",
+                "alaabta Suuqa leh": "alaabta Suuqa leh",
+                "bahiyaha Dadweynaha": "bahiyaha Dadweynaha"
             }
             category_selection = st.selectbox("📂 Nooca Warbixinta (Type)", list(cat_map.keys()))
             item = st.text_input("📦 Magaca Alaabta (Item Name)")
@@ -377,12 +398,13 @@ with tab_manager:
             m1, m2, m3, m4 = st.columns(4)
             
             count_total = len(df)
-            count_missing = len(df[df['Category'] == 'Maqan']) if 'Category' in df.columns else 0
-            count_new = len(df[df['Category'] == 'Dadweynaha']) if 'Category' in df.columns else 0
+            # USING STRICT CATEGORY NAMES FOR METRICS
+            count_missing = len(df[df['Category'] == 'alaabta Maqan']) if 'Category' in df.columns else 0
+            count_new = len(df[df['Category'] == 'bahiyaha Dadweynaha']) if 'Category' in df.columns else 0
             
             m1.metric("Total", count_total)
-            m2.metric("Missing (Maqan)", count_missing, delta_color="inverse")
-            m3.metric("New Requests", count_new)
+            m2.metric("Maqan", count_missing, delta_color="inverse")
+            m3.metric("Dadweynaha", count_new)
             m4.metric("Branches", df['Branch'].nunique() if 'Branch' in df.columns else 0)
             
             st.markdown("---")
@@ -399,7 +421,6 @@ with tab_manager:
                     use_container_width=True
                 )
             with c2:
-                # EXCEL RESTORED HERE
                 st.download_button(
                     label="📥 Download Excel File",
                     data=generate_excel(df),
@@ -410,10 +431,7 @@ with tab_manager:
 
             st.markdown("---")
 
-            
-                    # ... (Inside Manager Tab) ...
-
-            # EDIT TABLE SECTION
+            # DELETE SECTION (With Confirmation)
             with st.expander("🛠️ Wax ka bedel / Tirtir (Edit/Delete)", expanded=False):
                 df_with_delete = df.copy()
                 df_with_delete.insert(0, "Select", False)
@@ -427,13 +445,12 @@ with tab_manager:
                     column_config={"Select": st.column_config.CheckboxColumn("❌", width="small")}
                 )
                 
-                # Initialize confirmation state
+                # Init Session State
                 if "confirm_delete" not in st.session_state:
                     st.session_state.confirm_delete = False
 
                 col_save, col_del = st.columns([1,1])
                 
-                # SAVE BUTTON
                 with col_save:
                     if st.button("💾 Kaydi (Save)", use_container_width=True):
                         try:
@@ -445,35 +462,31 @@ with tab_manager:
                         except Exception as e:
                             st.error(str(e))
                 
-                # DELETE BUTTON (Triggers Confirmation)
                 with col_del:
                     if st.button("🗑️ Tirtir (Delete)", type="primary", use_container_width=True):
-                        # Check if any row is selected
                         if edited_df["Select"].any():
                             st.session_state.confirm_delete = True
                         else:
-                            st.warning("⚠️ Fadlan xulo safafka aad rabto inaad tirtirto (Select rows first).")
+                            st.warning("⚠️ Fadlan xulo safafka (Select rows).")
 
-                # CONFIRMATION BOX (Only shows if Delete was clicked)
                 if st.session_state.confirm_delete:
-                    st.warning("⚠️ Ma hubtaa inaad tirtirto xogtan? (Are you sure you want to delete?)", icon="⚠️")
-                    
+                    st.warning("⚠️ Ma hubtaa inaad tirtirto? (Are you sure?)", icon="⚠️")
                     c_yes, c_no = st.columns(2)
                     with c_yes:
-                        if st.button("✅ Haa, Tirtir (Yes)", type="primary", use_container_width=True):
+                        if st.button("✅ Haa, Tirtir", type="primary", use_container_width=True):
                             try:
                                 rows_to_keep = edited_df[edited_df["Select"] == False]
                                 final_df = rows_to_keep.drop(columns=["Select"])
                                 conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
                                 st.cache_data.clear()
-                                st.session_state.confirm_delete = False # Reset
-                                st.success("✅ Waa la tirtiray! (Deleted)")
+                                st.session_state.confirm_delete = False
+                                st.success("✅ Waa la tirtiray!")
                                 st.rerun()
                             except Exception as e:
                                 st.error(str(e))
-                    
                     with c_no:
                         if st.button("❌ Maya (Cancel)", use_container_width=True):
                             st.session_state.confirm_delete = False
                             st.rerun()
-
+        else:
+            st.info("No data found.")
