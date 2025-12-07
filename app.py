@@ -30,47 +30,56 @@ def get_local_time():
     tz = pytz.timezone('Africa/Mogadishu') 
     return datetime.now(tz)
 
-# --- 2. CSS: ORIGINAL CLEAN WHITE THEME ---
+# --- 2. CSS: RESPONSIVE THEME (Auto Dark/Light) ---
 st.markdown("""
 <style>
-    /* Main Background */
-    .stApp {
-        background-color: #ffffff;
-        color: #000000;
-    }
-    
-    /* Hide Default Menus */
+    /* 1. Hide Default Menus */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* Input Fields */
+    /* 2. Responsive Backgrounds & Text */
+    /* We do NOT force white background. Streamlit will auto-switch to Dark/Light */
+    
+    /* 3. Input Fields - Adapt to Dark/Light Mode automatically */
     .stTextInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #f0f2f6;
-        color: black;
+        background-color: var(--secondary-background-color) !important;
+        color: var(--text-color) !important;
         border-radius: 5px;
+        border: 1px solid rgba(128, 128, 128, 0.2);
     }
     
-    /* Buttons */
+    /* 4. Metric Cards - Responsive */
+    div[data-testid="stMetric"] {
+        background-color: var(--secondary-background-color); /* Auto-switch */
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        padding: 15px;
+        border-radius: 8px;
+    }
+    
+    /* 5. BRANDING: Buttons (Navy Blue - Visible in both modes) */
     div[data-testid="stButton"] button {
+        background-color: #1E3A8A; /* Navy Blue */
+        color: white;
         border-radius: 5px;
         font-weight: bold;
         border: none;
     }
+    div[data-testid="stButton"] button:hover {
+        background-color: #8B0000; /* Red Hover */
+        color: white;
+    }
     
-    /* Tabs Selection - Red/Blue Style */
+    /* 6. BRANDING: Tabs (Navy Blue Selection) */
     .stTabs [aria-selected="true"] {
-        background-color: #1E3A8A !important; /* Navy Blue */
+        background-color: #1E3A8A !important;
         color: white !important;
     }
     
-    /* Metrics Cards */
-    div[data-testid="stMetric"] {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    /* 7. Headers (Responsive Color) */
+    h1, h2, h3 {
+        text-align: center;
+        /* No fixed color - allows white text in Dark Mode and black in Light Mode */
     }
 </style>
 """, unsafe_allow_html=True)
@@ -105,7 +114,7 @@ def generate_excel(df):
     output.seek(0)
     return output
 
-# --- 5. PDF ENGINE (FIXED COLUMNS & GRID LINES) ---
+# --- 5. PDF ENGINE (PERFECT ALIGNMENT & GRID) ---
 def generate_pdf(df):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -234,7 +243,7 @@ def generate_pdf(df):
             vals = [
                 cat[:15],
                 str(row.get('Item', ''))[:25],
-                str(row.get('Branch', ''))[:18], # Fits longer branch names
+                str(row.get('Branch', ''))[:18], 
                 str(row.get('Employee', ''))[:14],
                 str(row.get('Note', ''))[:20]
             ]
@@ -281,7 +290,7 @@ def generate_pdf(df):
     return buffer
 
 # --- 6. APP UI ---
-st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏢 Mareero General Trading LLC</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>🏢 Mareero General Trading LLC</h1>", unsafe_allow_html=True)
 
 tab_staff, tab_manager = st.tabs(["📝 Qeybta Shaqaalaha (Staff)", "🔐 Maamulka (Manager)"])
 
