@@ -30,7 +30,7 @@ def get_local_time():
     tz = pytz.timezone('Africa/Mogadishu') 
     return datetime.now(tz)
 
-# --- 2. CSS: ORIGINAL WHITE & RED THEME ---
+# --- 2. CSS: YOUR ORIGINAL WHITE & RED THEME ---
 st.markdown("""
 <style>
     /* Hide Streamlit Logos & Menus */
@@ -95,7 +95,7 @@ def generate_excel(df):
     output.seek(0)
     return output
 
-# --- 5. PDF ENGINE (PERFECT ALIGNMENT & COLORS) ---
+# --- 5. PDF ENGINE (WITH SIGNATURE & LINES) ---
 def generate_pdf(df):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -104,6 +104,7 @@ def generate_pdf(df):
     # --- COLORS & STYLES ---
     primary_color = colors.HexColor("#8B0000") # Dark Red
     text_color = colors.HexColor("#2C3E50")    # Dark Blue/Grey
+    line_color = colors.HexColor("#dcdcdc")    # Light Grey for grid lines
     
     # --- HEADER ---
     c.setFillColor(primary_color)
@@ -129,8 +130,8 @@ def generate_pdf(df):
     
     # Calc Metrics
     total = len(df)
-    missing = len(df[df['Category'] == 'Maqan']) if not df.empty else 0
-    new_req = len(df[df['Category'] == 'Dadweynaha']) if not df.empty else 0
+    missing = len(df[df['Category'] == 'alaabta Maqan']) if not df.empty else 0
+    new_req = len(df[df['Category'] == 'bahiyaha Dadweynaha']) if not df.empty else 0
     
     # Draw Summary Boxes
     box_y = height - 220
@@ -165,13 +166,12 @@ def generate_pdf(df):
     
     if not df.empty:
         try:
-            plt.rcdefaults() # Ensure white background for PDF
+            plt.rcdefaults() 
             
             # Chart 1: Pie
             fig1, ax1 = plt.subplots(figsize=(4, 3))
             category_counts = df['Category'].value_counts()
             if not category_counts.empty:
-                # Custom colors: Red for Maqan, Blue for Dadweynaha, Grey for others
                 custom_colors = ['#d32f2f', '#1976d2', '#9e9e9e', '#ffa726'] 
                 ax1.pie(category_counts, labels=category_counts.index, autopct='%1.0f%%', colors=custom_colors)
                 
@@ -196,23 +196,26 @@ def generate_pdf(df):
         except Exception:
             pass
 
-    # --- SECTION 3: LIST ---
+    # --- SECTION 3: LIST (FIXED WIDTHS & LINES) ---
     y_list = y_chart - 250
     c.setFillColor(text_color)
     c.setFont("Helvetica-Bold", 16)
     c.drawString(40, y_list, "3. LIISKA FAAHFAAHSAN (DETAILS):")
 
-    # Table Header
     y_row = y_list - 30
-    # Fixed Column Widths (Total ~515)
-    col_widths = [80, 150, 80, 80, 125] 
+    
+    # FIXED WIDTHS to fit "Kaydka M.Hassan"
+    # Total = 515 pts
+    col_widths = [75, 135, 110, 85, 110] 
     headers = ["TYPE", "ITEM NAME", "BRANCH", "STAFF", "NOTES"]
     
+    # Header Bar
     c.setFillColor(primary_color)
     c.rect(40, y_row-5, sum(col_widths), 20, fill=1, stroke=0)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 9)
     
+    # Draw Headers
     x_pos = 45
     for i, h in enumerate(headers):
         c.drawString(x_pos, y_row, h)
@@ -222,46 +225,71 @@ def generate_pdf(df):
     c.setFont("Helvetica", 9)
     
     if not df.empty:
-        # Sort: Show Maqan first
         if 'Category' in df.columns:
             df = df.sort_values(by=['Category'])
 
         row_count = 0
         for _, row in df.iterrows():
             if row_count % 2 == 0:
-                c.setFillColor(colors.HexColor("#f5f5f5")) # Light grey stripe
+                c.setFillColor(colors.HexColor("#f5f5f5"))
                 c.rect(40, y_row-5, sum(col_widths), 15, fill=1, stroke=0)
             
-            # Text Color Logic
+            # Highlight Colors
             cat_val = str(row.get('Category', ''))
-            
-            if cat_val == 'Maqan':
+            if 'Maqan' in cat_val:
                 c.setFillColor(colors.red)
-            elif cat_val == 'Dadweynaha':
+            elif 'Dadweynaha' in cat_val:
                 c.setFillColor(colors.blue)
             else:
                 c.setFillColor(colors.black)
             
-            # Clean and truncate text
+            # Data Values (Truncated slightly to fit)
             vals = [
-                cat_val[:15],
-                str(row.get('Item', ''))[:25],
-                str(row.get('Branch', '')).replace("Branch", "Br."),
-                str(row.get('Employee', ''))[:14],
-                str(row.get('Note', ''))[:22]
+                cat_val[:14],
+                str(row.get('Item', ''))[:24],
+                str(row.get('Branch', ''))[:18], # Fits Kaydka M.Hassan
+                str(row.get('Employee', ''))[:13],
+                str(row.get('Note', ''))[:20]
             ]
             
+            # Draw Columns & Vertical Lines
             x_pos = 45
+            c.setLineWidth(0.5)
+            c.setStrokeColor(line_color)
+            
             for i, val in enumerate(vals):
                 c.drawString(x_pos, y_row, val)
+                # Draw vertical line after each column
+                c.line(x_pos + col_widths[i] - 5, y_row-5, x_pos + col_widths[i] - 5, y_row+10)
                 x_pos += col_widths[i]
             
             y_row -= 18
             row_count += 1
             
-            if y_row < 50: 
+            # Page Break
+            if y_row < 100: 
                 c.showPage()
                 y_row = height - 50
+
+    # --- SIGNATURE SECTION ---
+    # Ensure signature is always at bottom or on new page
+    if y_row < 80:
+        c.showPage()
+        y_row = height - 100
+    
+    y_sig = 50
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(1)
+    
+    # Line 1: Manager
+    c.line(40, y_sig, 200, y_sig)
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y_sig-15, "Manager Signature")
+    
+    # Line 2: Date
+    c.line(350, y_sig, 510, y_sig)
+    c.drawString(350, y_sig-15, "Date & Stamp")
 
     c.save()
     buffer.seek(0)
@@ -285,9 +313,9 @@ with tab_staff:
             employee = st.text_input("👤 Magacaaga (Your Name)")
         with c2:
             cat_map = {
-                "alaabta Maqan (Missing)": "Maqan",
-                "alaabta Suqqa leh (High Demand)": "Suuq leh",
-                "bahiyaha Dadweynaha (New Request)": "Dadweynaha"
+                "alaabta Maqan (Missing)": "alaabta Maqan",
+                "alaabta Suqqa leh (High Demand)": "alaabta Suqqa leh",
+                "bahiyaha Dadweynaha (New Request)": "bahiyaha Dadweynaha"
             }
             category_selection = st.selectbox("📂 Nooca Warbixinta (Report Type)", list(cat_map.keys()))
             item = st.text_input("📦 Magaca Alaabta (Item Name)")
@@ -349,8 +377,8 @@ with tab_manager:
             if not df.empty:
                 # METRICS
                 count_total = len(df)
-                count_missing = len(df[df['Category'] == 'Maqan']) if 'Category' in df.columns else 0
-                count_new = len(df[df['Category'] == 'Dadweynaha']) if 'Category' in df.columns else 0
+                count_missing = len(df[df['Category'] == 'alaabta Maqan']) if 'Category' in df.columns else 0
+                count_new = len(df[df['Category'] == 'bahiyaha Dadweynaha']) if 'Category' in df.columns else 0
                 
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Wadarta (Total)", count_total)
