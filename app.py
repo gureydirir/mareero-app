@@ -24,53 +24,59 @@ from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
 import io
 import random
+import urllib.parse # NEW: For WhatsApp Link
 
 # --- 1. SETUP TIMEZONE (Somalia) ---
 def get_local_time():
     tz = pytz.timezone('Africa/Mogadishu') 
     return datetime.now(tz)
 
-# --- 2. CSS: ORIGINAL CLEAN WHITE THEME ---
+# --- 2. CSS: RESPONSIVE THEME (Auto Dark/Light) ---
 st.markdown("""
 <style>
-    /* Main Background */
-    .stApp {
-        background-color: #ffffff;
-        color: #000000;
-    }
-    
-    /* Hide Default Menus */
+    /* 1. Hide Default Menus */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* Input Fields */
+    /* 2. Responsive Inputs */
     .stTextInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #f0f2f6;
-        color: black;
+        background-color: var(--secondary-background-color) !important;
+        color: var(--text-color) !important;
         border-radius: 5px;
+        border: 1px solid rgba(128, 128, 128, 0.2);
     }
     
-    /* Buttons */
+    /* 3. Metric Cards */
+    div[data-testid="stMetric"] {
+        background-color: var(--secondary-background-color);
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        padding: 15px;
+        border-radius: 8px;
+    }
+    
+    /* 4. BRANDING: Buttons (Navy Blue) */
     div[data-testid="stButton"] button {
+        background-color: #1E3A8A; /* Navy Blue */
+        color: white;
         border-radius: 5px;
         font-weight: bold;
         border: none;
     }
+    div[data-testid="stButton"] button:hover {
+        background-color: #8B0000; /* Red Hover */
+        color: white;
+    }
     
-    /* Tabs Selection - Red/Blue Style */
+    /* 5. Tabs */
     .stTabs [aria-selected="true"] {
-        background-color: #1E3A8A !important; /* Navy Blue */
+        background-color: #1E3A8A !important;
         color: white !important;
     }
     
-    /* Metrics Cards */
-    div[data-testid="stMetric"] {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    /* 6. Headers */
+    h1, h2, h3 {
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -105,15 +111,15 @@ def generate_excel(df):
     output.seek(0)
     return output
 
-# --- 5. PDF ENGINE (FIXED COLUMNS & GRID LINES) ---
+# --- 5. PDF ENGINE (FIXED PAGE 2 & NAME CHANGE) ---
 def generate_pdf(df):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
     # Colors
-    header_bg = colors.HexColor("#1E3A8A") # Navy Blue Header
-    line_color = colors.HexColor("#dcdcdc") # Grey Grid Lines
+    header_bg = colors.HexColor("#1E3A8A") # Navy Blue
+    line_color = colors.HexColor("#dcdcdc") # Grey Grid
     
     # --- HEADER ---
     c.setFillColor(header_bg)
@@ -123,7 +129,7 @@ def generate_pdf(df):
     c.setFont("Helvetica-Bold", 24)
     c.drawString(40, height-50, "MAREERO SYSTEM")
     c.setFont("Helvetica", 12)
-    c.drawString(40, height-70, "General Trading & Spare Parts LLC")
+    c.drawString(40, height-70, " Mareero General Trading  LLC")
     
     # Time
     current_time = get_local_time()
@@ -190,28 +196,27 @@ def generate_pdf(df):
         except:
             pass
 
-    # --- TABLE (FIXED WIDTHS & GRID) ---
+    # --- TABLE ---
     y_pos -= 240
     c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 14)
     c.drawString(40, y_pos, "3. LIISKA FAAHFAAHSAN (DETAILS)")
     
     y_curr = y_pos - 30
-    # Adjusted Widths: Increased Branch to 100 to fit "Kaydka M.Hassan"
-    col_widths = [80, 140, 100, 85, 110] 
+    col_widths = [80, 135, 105, 85, 110] 
     headers = ["TYPE", "ITEM NAME", "BRANCH", "STAFF", "NOTES"]
     
-    # Header Bar
-    c.setFillColor(header_bg)
-    c.rect(40, y_curr-6, sum(col_widths), 22, fill=1, stroke=0)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 9)
-    
-    x_pos = 45
-    for i, h in enumerate(headers):
-        c.drawString(x_pos, y_curr+2, h)
-        x_pos += col_widths[i]
-        
+    def draw_header(y):
+        c.setFillColor(header_bg)
+        c.rect(40, y-6, sum(col_widths), 22, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 9)
+        xp = 45
+        for i, h in enumerate(headers):
+            c.drawString(xp, y+2, h)
+            xp += col_widths[i]
+
+    draw_header(y_curr)
     y_curr -= 22
     c.setFont("Helvetica", 9)
     
@@ -225,16 +230,15 @@ def generate_pdf(df):
                 c.setFillColor(colors.HexColor("#f1f5f9"))
                 c.rect(40, y_curr-6, sum(col_widths), 18, fill=1, stroke=0)
             
-            # Color Logic
             cat = str(row.get('Category', ''))
-            if 'go\'an' in cat or 'Maqan' in cat: c.setFillColor(colors.red)
+            if "go'an" in cat or "Maqan" in cat: c.setFillColor(colors.red)
             elif 'Dadweynaha' in cat: c.setFillColor(colors.blue)
             else: c.setFillColor(colors.black)
             
             vals = [
                 cat[:15],
                 str(row.get('Item', ''))[:25],
-                str(row.get('Branch', ''))[:18], # Fits longer branch names
+                str(row.get('Branch', ''))[:18], 
                 str(row.get('Employee', ''))[:14],
                 str(row.get('Note', ''))[:20]
             ]
@@ -245,11 +249,9 @@ def generate_pdf(df):
             
             for i, val in enumerate(vals):
                 c.drawString(x_pos, y_curr, val)
-                # Draw Vertical Grid Line
                 c.line(x_pos + col_widths[i] - 5, y_curr-5, x_pos + col_widths[i] - 5, y_curr+12)
                 x_pos += col_widths[i]
             
-            # Horizontal Line below row
             c.line(40, y_curr-6, 40+sum(col_widths), y_curr-6)
             
             y_curr -= 18
@@ -258,6 +260,9 @@ def generate_pdf(df):
             if y_curr < 60:
                 c.showPage()
                 y_curr = height - 50
+                draw_header(y_curr)
+                y_curr -= 22
+                c.setFont("Helvetica", 9)
 
     # --- SIGNATURE ---
     if y_curr < 80:
@@ -309,7 +314,6 @@ with tab_staff:
         if st.form_submit_button("🚀 Gudbi (Submit)", use_container_width=True):
             if employee and item:
                 try:
-                    # FIX: Changed ttl from 0 to 5 to prevent Quota Error
                     data = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=5)
                     if data is None: data = pd.DataFrame()
                     data = data.dropna(how="all")
@@ -363,15 +367,18 @@ with tab_manager:
                 st.rerun()
         
         try:
-            # FIX: Changed ttl to 5 to avoid Quota Limits
             df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=5)
             if df is None: df = pd.DataFrame()
             df = df.dropna(how="all")
+            if not df.empty and 'Date' in df.columns:
+                df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         except:
             df = pd.DataFrame()
 
         if not df.empty:
             st.markdown("---")
+            
+            # METRICS
             count_total = len(df)
             count_missing = len(df[df['Category'] == 'Alaabta go\'an']) if 'Category' in df.columns else 0
             count_new = len(df[df['Category'] == 'bahiyaha Dadweynaha']) if 'Category' in df.columns else 0
@@ -383,83 +390,148 @@ with tab_manager:
             
             st.markdown("---")
             
-            st.subheader("📄 Warbixinada (Reports)")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.download_button(
-                    label="📥 Download PDF Report",
-                    data=generate_pdf(df),
-                    file_name=f"Mareero_Report_{get_local_time().strftime('%Y-%m-%d')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-            with c2:
-                st.download_button(
-                    label="📥 Download Excel File",
-                    data=generate_excel(df),
-                    file_name=f"Mareero_Data_{get_local_time().strftime('%Y-%m-%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
+            # --- SEARCH & FILTER ---
+            st.subheader("🔍 Search & Filter")
+            col_search, col_filter = st.columns(2)
+            
+            with col_search:
+                search_term = st.text_input("🔍 Raadi (Search Item/Branch/Staff)...", placeholder="Type to search...")
+                
+            with col_filter:
+                date_filter = st.selectbox("📅 Waqtiga (Time Filter)", ["All Time", "Today (Maanta)", "This Week (Isbuucan)"])
+            
+            filtered_df = df.copy()
+            now = get_local_time()
+            
+            if date_filter == "Today (Maanta)":
+                filtered_df = filtered_df[filtered_df['Date'].dt.date == now.date()]
+            elif date_filter == "This Week (Isbuucan)":
+                start_week = now - pd.Timedelta(days=7)
+                filtered_df = filtered_df[filtered_df['Date'] >= start_week]
+                
+            if search_term:
+                filtered_df = filtered_df[filtered_df.astype(str).apply(lambda x: x.str.contains(search_term, case=False).any(), axis=1)]
+
+            # --- WHATSAPP TOOL (NEW) ---
+            if not filtered_df.empty:
+                # Calculate Stats for WhatsApp
+                wa_total = len(filtered_df)
+                wa_missing = len(filtered_df[filtered_df['Category'] == "Alaabta go'an"])
+                wa_req = len(filtered_df[filtered_df['Category'] == "bahiyaha Dadweynaha"])
+                
+                try:
+                    top_branch = filtered_df['Branch'].mode()[0]
+                except:
+                    top_branch = "N/A"
+
+                wa_text = f"""*📅 MAREERO DAILY REPORT*
+🗓️ Date: {now.strftime('%d-%b-%Y')}
+
+📊 *Summary:*
+🔴 Alaabta go'an: {wa_missing}
+🔵 Dalab (Requests): {wa_req}
+✅ Total Entries: {wa_total}
+
+📍 Top Branch: {top_branch}
+
+_Generated by Mareero System_"""
+                
+                # Encoded Link
+                wa_link = f"https://wa.me/?text={urllib.parse.quote(wa_text)}"
+                
+                st.info("📱 **WhatsApp Report Generator**")
+                col_wa_btn, col_wa_txt = st.columns([1, 3])
+                with col_wa_btn:
+                    st.link_button("📤 Send via WhatsApp", wa_link, type="primary")
+                with col_wa_txt:
+                    st.code(wa_text, language="text")
 
             st.markdown("---")
 
-            # --- DELETE SECTION ---
-            with st.expander("🛠️ Wax ka bedel / Tirtir (Edit/Delete)", expanded=False):
-                df_with_delete = df.copy()
-                df_with_delete.insert(0, "Select", False)
+            # --- DOWNLOAD BUTTONS ---
+            st.subheader("📄 Warbixinada (Reports)")
+            if not filtered_df.empty:
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.download_button(
+                        label=f"📥 Download PDF ({len(filtered_df)} items)",
+                        data=generate_pdf(filtered_df),
+                        file_name=f"Mareero_Report_{get_local_time().strftime('%Y-%m-%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                with c2:
+                    st.download_button(
+                        label=f"📥 Download Excel ({len(filtered_df)} items)",
+                        data=generate_excel(filtered_df),
+                        file_name=f"Mareero_Data_{get_local_time().strftime('%Y-%m-%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+            else:
+                st.warning("⚠️ No data matches your search/filter.")
 
-                edited_df = st.data_editor(
-                    df_with_delete,
-                    num_rows="fixed",
-                    hide_index=True,
-                    use_container_width=True,
-                    key="data_editor",
-                    column_config={"Select": st.column_config.CheckboxColumn("❌", width="small")}
-                )
-                
-                if "confirm_delete" not in st.session_state:
-                    st.session_state.confirm_delete = False
-                
-                c_save, c_del = st.columns([1,1])
-                
-                with c_save:
-                    if st.button("💾 Kaydi Isbedelka", use_container_width=True):
-                        try:
-                            final_df = edited_df.drop(columns=["Select"])
-                            conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
-                            st.cache_data.clear()
-                            st.success("✅ Saved!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(str(e))
-                
-                with c_del:
-                    if st.button("🗑️ Tirtir", type="primary", use_container_width=True):
-                        if edited_df["Select"].any():
-                            st.session_state.confirm_delete = True
-                        else:
-                            st.warning("⚠️ Select rows first")
-                
-                if st.session_state.confirm_delete:
-                    st.warning("⚠️ Ma hubtaa inaad tirtirto? (Are you sure?)")
-                    cy, cn = st.columns(2)
-                    with cy:
-                        if st.button("✅ Haa", type="primary", use_container_width=True):
+            st.markdown("---")
+
+            # --- EDIT/DELETE TABLE ---
+            with st.expander("🛠️ Wax ka bedel / Tirtir (Edit/Delete)", expanded=True):
+                if not filtered_df.empty:
+                    df_with_delete = filtered_df.copy()
+                    df_with_delete.insert(0, "Select", False)
+
+                    edited_df = st.data_editor(
+                        df_with_delete,
+                        num_rows="fixed",
+                        hide_index=True,
+                        use_container_width=True,
+                        key="data_editor",
+                        column_config={"Select": st.column_config.CheckboxColumn("❌", width="small")}
+                    )
+                    
+                    if "confirm_delete" not in st.session_state:
+                        st.session_state.confirm_delete = False
+                    
+                    c_save, c_del = st.columns([1,1])
+                    
+                    with c_save:
+                        if st.button("💾 Kaydi Isbedelka", use_container_width=True):
                             try:
-                                rows_to_keep = edited_df[edited_df["Select"] == False]
-                                final_df = rows_to_keep.drop(columns=["Select"])
+                                final_df = edited_df.drop(columns=["Select"])
                                 conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
                                 st.cache_data.clear()
-                                st.session_state.confirm_delete = False
-                                st.success("Deleted!")
+                                st.success("✅ Saved!")
                                 st.rerun()
                             except Exception as e:
                                 st.error(str(e))
-                    with cn:
-                        if st.button("❌ Maya", use_container_width=True):
-                            st.session_state.confirm_delete = False
-                            st.rerun()
+                    
+                    with c_del:
+                        if st.button("🗑️ Tirtir", type="primary", use_container_width=True):
+                            if edited_df["Select"].any():
+                                st.session_state.confirm_delete = True
+                            else:
+                                st.warning("⚠️ Select rows first")
+                    
+                    if st.session_state.confirm_delete:
+                        st.warning("⚠️ Ma hubtaa inaad tirtirto? (Are you sure?)")
+                        cy, cn = st.columns(2)
+                        with cy:
+                            if st.button("✅ Haa", type="primary", use_container_width=True):
+                                try:
+                                    rows_to_keep = edited_df[edited_df["Select"] == False]
+                                    final_df = rows_to_keep.drop(columns=["Select"])
+                                    conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
+                                    st.cache_data.clear()
+                                    st.session_state.confirm_delete = False
+                                    st.success("Deleted!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(str(e))
+                        with cn:
+                            if st.button("❌ Maya", use_container_width=True):
+                                st.session_state.confirm_delete = False
+                                st.rerun()
+                else:
+                    st.info("No data found for this filter.")
 
         else:
             st.info("No data found.")
