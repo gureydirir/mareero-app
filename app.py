@@ -281,11 +281,6 @@ st.markdown("""
     <p style='color: #94a3b8;'>Trading LLC</p>
 </div>
 """, unsafe_allow_html=True)
-st.markdown(f"<p style='text-align:
-center; color: gray;'>System Date:
-{get_local_time().strftime('%d %B %Y | %I :%M %p')}</p>", 
-unsafe allow html=True)
-
 
 # Tabs
 tab_staff, tab_manager = st.tabs(["📝 SHAQAALAHA (Staff)", "🔐 MAAMULKA (Manager)"])
@@ -481,3 +476,4 @@ with tab_manager:
                         if st.button("❌ Maya (Cancel)", use_container_width=True):
                             st.session_state.confirm_delete = False
                             st.rerun()
+
