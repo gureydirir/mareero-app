@@ -11,7 +11,7 @@ st.set_page_config(
 
 # --- IMPORTS ---
 import matplotlib
-matplotlib.use('Agg') # Prevent server crash
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
@@ -24,32 +24,35 @@ from reportlab.lib.utils import ImageReader
 import io
 import random
 
-# --- SET TIMEZONE (SOMALIA/EAST AFRICA) ---
+# --- SET TIMEZONE ---
 def get_local_time():
     tz = pytz.timezone('Africa/Mogadishu') 
     return datetime.now(tz)
 
-# --- CSS: DARK MODE FRIENDLY & RESPONSIVE ---
+# --- CSS: PROFESSIONAL CORPORATE THEME (BLUE & SLATE) ---
 st.markdown("""
 <style>
-    /* Global Text & Background Fixes */
-    .block-container { padding-top: 1rem; padding-bottom: 3rem; }
+    /* MAIN CONTAINER */
+    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; }
     
-    /* Hide Streamlit Default Elements */
+    /* HIDE STREAMLIT UI */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* METRIC CARDS (Dark Mode Compatible) */
-    div[data-testid="stMetric"] {
-        background-color: rgba(255, 255, 255, 0.05); /* Transparent White */
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 10px;
-        border-radius: 10px;
-        text-align: center;
+    /* CARDS & METRICS (Glassmorphism Slate) */
+    div[data-testid="stMetric"], div[data-testid="stForm"] {
+        background-color: #1e293b; /* Slate 800 */
+        border: 1px solid #334155; /* Slate 700 */
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     
-    /* TABS DESIGN (Fixed for Mobile Dark Mode) */
+    div[data-testid="stMetricLabel"] { color: #94a3b8 !important; } /* Slate 400 */
+    div[data-testid="stMetricValue"] { color: #f8fafc !important; } /* Slate 50 */
+    
+    /* TABS DESIGN (Professional Blue) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
@@ -57,32 +60,38 @@ st.markdown("""
     
     .stTabs [data-baseweb="tab"] {
         height: 50px;
-        background-color: rgba(255, 255, 255, 0.05); /* Dark Transparent */
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 5px;
-        color: #e0e0e0; /* Light Text */
-        font-weight: 600;
+        background-color: #0f172a; /* Slate 900 */
+        border: 1px solid #334155;
+        border-radius: 6px;
+        color: #cbd5e1;
+        font-weight: 500;
     }
     
-    /* Selected Tab - Brand Red */
+    /* Selected Tab */
     .stTabs [aria-selected="true"] {
-        background-color: #8B0000 !important;
+        background-color: #2563eb !important; /* Corporate Blue */
         color: white !important;
-        border: 1px solid #8B0000;
+        border: 1px solid #2563eb;
     }
 
     /* INPUT FIELDS */
     .stTextInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: rgba(255, 255, 255, 0.05) !important;
+        background-color: #0f172a !important; /* Darker Input Background */
         color: white !important;
-        border: 1px solid #444 !important;
+        border: 1px solid #475569 !important;
     }
 
     /* BUTTONS */
     div[data-testid="stButton"] button {
-        border-radius: 8px;
-        font-weight: bold;
-        transition: 0.3s;
+        border-radius: 6px;
+        font-weight: 600;
+        border: none;
+    }
+    
+    /* Primary Action Buttons */
+    button[kind="secondary"] {
+        background-color: #3b82f6;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -97,19 +106,27 @@ except Exception as e:
 
 # --- 2. PROFESSIONAL REPORT ENGINES ---
 
+def clean_text(text):
+    """Removes NaN and converts to string"""
+    if pd.isna(text) or str(text).lower() == 'nan':
+        return "-"
+    return str(text)
+
 def generate_excel(df):
     output = io.BytesIO()
+    # Clean data before export
+    df_export = df.fillna("-")
     try:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Warbixin')
+            df_export.to_excel(writer, index=False, sheet_name='Warbixin')
             worksheet = writer.sheets['Warbixin']
-            for i, col in enumerate(df.columns):
-                max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 2
+            for i, col in enumerate(df_export.columns):
+                max_len = max(df_export[col].astype(str).map(len).max(), len(str(col))) + 2
                 col_letter = chr(65 + i)
                 worksheet.column_dimensions[col_letter].width = max_len
     except:
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False)
+            df_export.to_excel(writer, index=False)
     output.seek(0)
     return output
 
@@ -118,82 +135,95 @@ def generate_pdf(df):
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
-    # COLORS
-    brand_red = colors.HexColor("#8B0000") 
-    brand_dark = colors.HexColor("#1A1A1A")
-    light_grey = colors.HexColor("#F0F0F0")
+    # --- NEW PROFESSIONAL COLOR PALETTE ---
+    brand_primary = colors.HexColor("#0f172a") # Slate 900 (Dark Navy)
+    brand_accent  = colors.HexColor("#2563eb") # Corporate Blue
+    text_dark     = colors.HexColor("#334155") # Slate 700
+    row_even      = colors.HexColor("#f1f5f9") # Very light slate
     
     # --- HEADER ---
-    c.setFillColor(brand_red)
+    c.setFillColor(brand_primary)
     c.rect(0, height-110, width, 110, fill=1, stroke=0)
     
+    # Logo Area / Title
     c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 28)
-    c.drawString(30, height-50, "MAREERO SYSTEM")
+    c.setFont("Helvetica-Bold", 26)
+    c.drawString(40, height-50, "MAREERO SYSTEM")
     c.setFont("Helvetica", 12)
-    c.drawString(30, height-70, "General Trading & Spare Parts")
+    c.setFillColor(colors.HexColor("#94a3b8")) # Lighter text
+    c.drawString(40, height-70, "General Trading & Spare Parts LLC")
     
+    # Report Meta Data
     current_time = get_local_time()
-    report_id = f"RPT-{current_time.strftime('%Y%m%d')}-{random.randint(100,999)}"
+    report_id = f"REF-{current_time.strftime('%Y%m%d')}-{random.randint(100,999)}"
     
-    c.drawRightString(width-30, height-40, "DAILY REPORT")
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawRightString(width-40, height-40, "OPERATIONAL REPORT")
     c.setFont("Helvetica", 10)
-    c.drawRightString(width-30, height-55, f"Date: {current_time.strftime('%d-%b-%Y')}")
-    c.drawRightString(width-30, height-70, f"Time: {current_time.strftime('%I:%M %p')}")
-    c.drawRightString(width-30, height-85, f"ID: {report_id}")
+    c.drawRightString(width-40, height-55, f"Date: {current_time.strftime('%d %b %Y')}")
+    c.drawRightString(width-40, height-70, f"Time: {current_time.strftime('%I:%M %p')}")
+    c.drawRightString(width-40, height-85, f"ID: {report_id}")
 
-    # --- METRICS ---
+    # --- METRICS SECTION ---
     y_pos = height - 150
-    c.setFillColor(brand_dark)
+    c.setFillColor(brand_primary)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(30, y_pos, "1. EXECUTIVE SUMMARY")
+    c.drawString(40, y_pos, "1. EXECUTIVE SUMMARY")
     
     total = len(df)
     missing = len(df[df['Category'] == 'Maqan']) if not df.empty else 0
     requests = len(df[df['Category'] == 'Dadweynaha']) if not df.empty else 0
     
-    metrics = [("Total Entries", str(total)), ("Missing Items", str(missing)), ("Requests", str(requests))]
-    box_w, box_h, gap = 170, 50, 15
-    start_x = 30
+    metrics = [("Total Reports", str(total)), ("Missing Stock", str(missing)), ("New Requests", str(requests))]
+    box_w, box_h, gap = 160, 50, 15
+    start_x = 40
     
     for i, (label, value) in enumerate(metrics):
         x = start_x + (i * (box_w + gap))
+        # Box shadow effect (simulated with offset gray rect)
+        c.setFillColor(colors.lightgrey)
+        c.roundRect(x+2, y_pos-62, box_w, box_h, 6, fill=1, stroke=0)
+        # Main box
         c.setFillColor(colors.white)
         c.setStrokeColor(colors.lightgrey)
-        c.roundRect(x, y_pos-60, box_w, box_h, 8, fill=1, stroke=1)
-        c.setFillColor(brand_red)
-        c.setFont("Helvetica-Bold", 18)
+        c.roundRect(x, y_pos-60, box_w, box_h, 6, fill=1, stroke=1)
+        
+        c.setFillColor(brand_accent)
+        c.setFont("Helvetica-Bold", 16)
         c.drawCentredString(x + box_w/2, y_pos-35, value)
-        c.setFillColor(colors.grey)
-        c.setFont("Helvetica", 10)
+        
+        c.setFillColor(text_dark)
+        c.setFont("Helvetica", 9)
         c.drawCentredString(x + box_w/2, y_pos-50, label)
 
-    # --- CHARTS SECTION (Added Back) ---
+    # --- CHARTS SECTION ---
     y_pos -= 80
-    c.setFillColor(brand_dark)
+    c.setFillColor(brand_primary)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(30, y_pos, "2. DATA VISUALIZATION")
+    c.drawString(40, y_pos, "2. VISUAL ANALYTICS")
     
     if not df.empty:
         try:
-            # Pie Chart (Categories)
+            # Pie Chart
             fig1, ax1 = plt.subplots(figsize=(4, 3))
             cat_counts = df['Category'].value_counts()
-            ax1.pie(cat_counts, labels=cat_counts.index, autopct='%1.0f%%', startangle=90, colors=['#8B0000', '#2F4F4F', '#A9A9A9'])
-            ax1.set_title("Categories", fontsize=10)
+            # Professional Blue/Slate colors for chart
+            ax1.pie(cat_counts, labels=cat_counts.index, autopct='%1.0f%%', startangle=90, colors=['#2563eb', '#64748b', '#94a3b8'])
             
             img1 = io.BytesIO()
             plt.savefig(img1, format='png', bbox_inches='tight', transparent=True)
             img1.seek(0)
-            c.drawImage(ImageReader(img1), 30, y_pos-220, width=240, height=180)
+            c.drawImage(ImageReader(img1), 40, y_pos-220, width=220, height=165)
             plt.close(fig1)
 
-            # Bar Chart (Branches)
+            # Bar Chart
             fig2, ax2 = plt.subplots(figsize=(4, 3))
             branch_counts = df['Branch'].value_counts()
-            branch_counts.plot(kind='bar', color='#8B0000', ax=ax2)
-            ax2.set_title("Activity by Branch", fontsize=10)
+            branch_counts.plot(kind='bar', color='#0f172a', ax=ax2) # Dark navy bars
             plt.xticks(rotation=45, ha='right', fontsize=8)
+            ax2.spines['top'].set_visible(False)
+            ax2.spines['right'].set_visible(False)
             
             img2 = io.BytesIO()
             plt.savefig(img2, format='png', bbox_inches='tight', transparent=True)
@@ -201,60 +231,67 @@ def generate_pdf(df):
             c.drawImage(ImageReader(img2), 300, y_pos-220, width=240, height=180)
             plt.close(fig2)
             
-        except Exception as e:
-            c.drawString(30, y_pos-30, "Charts unavailable.")
+        except Exception:
+            c.drawString(40, y_pos-30, "No visual data available.")
     
     # --- TABLE SECTION ---
     y_pos -= 240
-    c.setFillColor(brand_dark)
+    c.setFillColor(brand_primary)
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(30, y_pos, "3. DETAILED INVENTORY LIST")
+    c.drawString(40, y_pos, "3. INVENTORY DETAILS")
     
-    # Header
+    # Header Settings
     y_curr = y_pos - 30
-    col_widths = [80, 160, 80, 80, 140]
-    headers = ["CATEGORY", "ITEM NAME", "BRANCH", "STAFF", "NOTE"]
+    # ADJUSTED COLUMN WIDTHS TO FIX OVERLAP:
+    # Page Width ~595. Margins ~80. Content ~515.
+    # Cat(70) + Item(140) + Branch(100) + Staff(90) + Note(115) = 515
+    col_widths = [70, 140, 100, 90, 115] 
+    headers = ["TYPE", "ITEM NAME", "BRANCH", "STAFF", "NOTES"]
     
-    c.setFillColor(brand_red)
-    c.rect(30, y_curr-5, sum(col_widths), 20, fill=1, stroke=0)
+    # Draw Header
+    c.setFillColor(brand_primary)
+    c.rect(40, y_curr-6, sum(col_widths), 22, fill=1, stroke=0)
     c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 9)
+    c.setFont("Helvetica-Bold", 8)
     
-    x_pos = 35
+    x_pos = 45
     for i, h in enumerate(headers):
         c.drawString(x_pos, y_curr+2, h)
         x_pos += col_widths[i]
         
-    y_curr -= 20
+    y_curr -= 22
     
-    # Rows
+    # Draw Rows
     c.setFont("Helvetica", 9)
     row_count = 0
     
     if not df.empty:
-        # SORTING: Sort by Item Name so same items appear together
+        # Sort logic
         if 'Item' in df.columns:
-            df = df.sort_values(by=['Item', 'Category'])
+            df = df.sort_values(by=['Category', 'Item'])
             
         for _, row in df.iterrows():
             if row_count % 2 == 0:
-                c.setFillColor(light_grey)
-                c.rect(30, y_curr-5, sum(col_widths), 15, fill=1, stroke=0)
+                c.setFillColor(row_even)
+                c.rect(40, y_curr-6, sum(col_widths), 18, fill=1, stroke=0)
             
-            # HIGHLIGHT LOGIC: Red for "Maqan"
-            is_missing = row.get('Category', '') == 'Maqan'
-            c.setFillColor(brand_red if is_missing else colors.black)
+            # Text Color Logic
+            category = clean_text(row.get('Category', ''))
+            is_missing = category == 'Maqan'
             
-            # Data
+            # Set Text Color
+            c.setFillColor(colors.red if is_missing else text_dark)
+            
+            # Prepare Data & Clean NaN
             vals = [
-                str(row.get('Category', ''))[:15],
-                str(row.get('Item', ''))[:28], # Item Name
-                str(row.get('Branch', '')).replace("Branch", "Br."),
-                str(row.get('Employee', ''))[:12],
-                str(row.get('Note', ''))[:25]
+                category[:12],
+                clean_text(row.get('Item', ''))[:24],   # Item Name
+                clean_text(row.get('Branch', '')).replace("Branch", "Br."), # Shorten Branch
+                clean_text(row.get('Employee', ''))[:14],
+                clean_text(row.get('Note', ''))[:20]
             ]
             
-            x_pos = 35
+            x_pos = 45
             for i, val in enumerate(vals):
                 c.drawString(x_pos, y_curr, val)
                 x_pos += col_widths[i]
@@ -262,60 +299,66 @@ def generate_pdf(df):
             y_curr -= 18
             row_count += 1
             
-            if y_curr < 50:
+            if y_curr < 60:
                 c.showPage()
                 y_curr = height - 50
 
-    # Signature
+    # Signature Area
     if y_curr < 120:
         c.showPage()
         y_curr = height - 100
         
     y_sig = 80
-    c.setStrokeColor(colors.black)
+    c.setStrokeColor(colors.grey)
+    c.setLineWidth(1)
     c.line(40, y_sig, 200, y_sig)
     c.line(350, y_sig, 510, y_sig)
     
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y_sig-15, "Manager Signature")
-    c.drawString(350, y_sig-15, "Date & Stamp")
+    c.setFillColor(text_dark)
+    c.setFont("Helvetica", 9)
+    c.drawString(40, y_sig-15, "Authorized Manager")
+    c.drawString(350, y_sig-15, "Date & Official Stamp")
     
     c.save()
     buffer.seek(0)
     return buffer
 
 # --- 3. APP UI ---
-st.markdown("<h1 style='text-align: center; color: #8B0000;'>🏢 Mareero General Trading LLC</h1>", unsafe_allow_html=True)
-st.markdown(f"<p style='text-align: center; color: gray;'>System Date: {get_local_time().strftime('%d %B %Y | %I:%M %p')}</p>", unsafe_allow_html=True)
 
-# TABS
+# Banner
+st.markdown("""
+<div style="text-align: center; margin-bottom: 20px;">
+    <h1 style='color: #2563eb; margin-bottom: 0;'>MAREERO SYSTEM</h1>
+    <p style='color: #64748b; font-size: 0.9em;'>General Trading & Spare Parts LLC</p>
+</div>
+""", unsafe_allow_html=True)
+
+# Tabs
 tab_staff, tab_manager = st.tabs(["📝 SHAQAALAHA (Staff)", "🔐 MAAMULKA (Manager)"])
 
 # --- STAFF TAB ---
 with tab_staff:
-    st.info("Fadlan halkan ku diiwaangeli warbixintaada maalinlaha ah.")
+    st.info("👋 Fadlan halkan ku diiwaangeli warbixintaada maalinlaha ah.")
     
     with st.form("log_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             branch_options = ["Head Q", "Branch 1", "Branch 3", "Branch 4", "Branch 5" , "Kaydka M.hassan"]
-            branch = st.selectbox("📍 Xulo Laanta (Select Branch)", branch_options)
-            employee = st.text_input("👤 Magacaaga (Your Name)")
+            branch = st.selectbox("📍 Branch / Laanta", branch_options)
+            employee = st.text_input("👤 Your Name / Magacaaga")
         with col2:
             cat_map = {
                 "alaabta Maqan (Missing)": "Maqan",
                 "alaabta Suqqa leh (High Demand)": "Suuq leh",
                 "bahiyaha Dadweynaha (New Request)": "Dadweynaha"
             }
-            category_selection = st.selectbox("📂 Nooca Warbixinta (Type)", list(cat_map.keys()))
-            item = st.text_input("📦 Magaca Alaabta (Item Name)")
+            category_selection = st.selectbox("📂 Report Type / Nooca", list(cat_map.keys()))
+            item = st.text_input("📦 Item Name / Alaabta")
         
-        note = st.text_input("📝 Faahfaahin / Tirada (Note/Qty)")
+        note = st.text_input("📝 Notes / Faahfaahin (Optional)")
         
-        # Spacer
         st.write("")
-        submit_btn = st.form_submit_button("🚀 GUDBI (SUBMIT)", use_container_width=True)
+        submit_btn = st.form_submit_button("Submit Report 🚀", use_container_width=True)
         
         if submit_btn:
             if employee and item:
@@ -333,17 +376,17 @@ with tab_staff:
                         "Employee": employee,
                         "Category": real_category,
                         "Item": item,
-                        "Note": note
+                        "Note": note if note else "-"
                     }])
                     
                     updated = pd.concat([data, new_row], ignore_index=True)
                     conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated)
                     st.cache_data.clear()
-                    st.success(f"✅ Waa la gudbiyay! {current_local_time}")
+                    st.success(f"✅ Success! Entry logged at {current_local_time}")
                 except Exception as e:
                     st.error(f"Error: {e}")
             else:
-                st.warning("⚠️ Fadlan buuxi Magacaaga iyo Alaabta.")
+                st.warning("⚠️ Please fill in Name and Item.")
 
 # --- MANAGER TAB ---
 with tab_manager:
@@ -354,22 +397,22 @@ with tab_manager:
     if not st.session_state.logged_in:
         c_pass, c_btn = st.columns([4, 1], vertical_alignment="bottom")
         with c_pass:
-            password = st.text_input("🔒 Geli Furaha (Password)", type="password", placeholder="******")
+            password = st.text_input("🔑 Password", type="password", placeholder="Enter admin password")
         with c_btn:
-            if st.button("Login ➡️", type="primary"):
+            if st.button("Login", type="primary"):
                 if password == "mareero2025":
                     st.session_state.logged_in = True
                     st.rerun()
                 else:
-                    st.error("Wrong Password")
+                    st.error("Incorrect Password")
     
     # DASHBOARD
     if st.session_state.logged_in:
         c_head, c_logout = st.columns([4,1])
         with c_head:
-            st.subheader("📊 Maamulka Dashboard")
+            st.write(f"**System Time:** {get_local_time().strftime('%I:%M %p')}")
         with c_logout:
-            if st.button("🔓 Logout"):
+            if st.button("Logout"):
                 st.session_state.logged_in = False
                 st.rerun()
             
@@ -388,18 +431,19 @@ with tab_manager:
             count_missing = len(df[df['Category'] == 'Maqan']) if 'Category' in df.columns else 0
             count_new = len(df[df['Category'] == 'Dadweynaha']) if 'Category' in df.columns else 0
             
-            m1.metric("Total", count_total)
-            m2.metric("Missing", count_missing, delta_color="inverse")
-            m3.metric("Requests", count_new)
-            m4.metric("Branches", df['Branch'].nunique() if 'Branch' in df.columns else 0)
+            m1.metric("Total Entries", count_total)
+            m2.metric("Missing Items", count_missing, delta_color="inverse")
+            m3.metric("New Requests", count_new)
+            m4.metric("Active Branches", df['Branch'].nunique() if 'Branch' in df.columns else 0)
             
             st.markdown("---")
             
             # REPORTS
+            st.subheader("📄 Generate Reports")
             c1, c2 = st.columns(2)
             with c1:
                 st.download_button(
-                    label="📥 Download PDF Report (With Charts)",
+                    label="📥 Download PDF Report",
                     data=generate_pdf(df),
                     file_name=f"Mareero_Report_{get_local_time().strftime('%Y-%m-%d')}.pdf",
                     mime="application/pdf",
@@ -407,7 +451,7 @@ with tab_manager:
                 )
             with c2:
                 st.download_button(
-                    label="📥 Download Excel Data",
+                    label="📥 Download Excel File",
                     data=generate_excel(df),
                     file_name=f"Mareero_Data_{get_local_time().strftime('%Y-%m-%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -417,7 +461,7 @@ with tab_manager:
             st.markdown("---")
 
             # EDIT TABLE
-            with st.expander("🛠️ Manage Data (Edit / Delete Rows)", expanded=False):
+            with st.expander("🛠️ Manage Database (Edit / Delete)", expanded=False):
                 df_with_delete = df.copy()
                 df_with_delete.insert(0, "Select", False)
 
@@ -427,7 +471,7 @@ with tab_manager:
                     hide_index=True,
                     use_container_width=True,
                     key="data_editor",
-                    column_config={"Select": st.column_config.CheckboxColumn("❌", width="small")}
+                    column_config={"Select": st.column_config.CheckboxColumn("Del", width="small")}
                 )
                 
                 col_save, col_del = st.columns([1,1])
@@ -437,20 +481,20 @@ with tab_manager:
                             final_df = edited_df.drop(columns=["Select"])
                             conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
                             st.cache_data.clear()
-                            st.success("Updated!")
+                            st.success("Database Updated!")
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))
                 with col_del:
-                    if st.button("🗑️ Delete Selected", type="primary", use_container_width=True):
+                    if st.button("🗑️ Delete Selected Rows", type="primary", use_container_width=True):
                         try:
                             rows_to_keep = edited_df[edited_df["Select"] == False]
                             final_df = rows_to_keep.drop(columns=["Select"])
                             conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=final_df)
                             st.cache_data.clear()
-                            st.success("Deleted!")
+                            st.success("Rows Deleted Successfully!")
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))
         else:
-            st.info("No data found.")
+            st.info("Database is empty.")
