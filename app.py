@@ -1,4 +1,5 @@
 import streamlit as st
+import re
 
 # ---------------------------------------------------------
 # PAGE CONFIGURATION (MUST BE FIRST)
@@ -101,116 +102,106 @@ except Exception as e:
     st.error(f"⚠️ Connection Error: {e}")
     st.stop()
 
-# --- 4. EXCEL ENGINE (ADVANCED TABLE STYLING) ---
-def clean_text(text):
-    if pd.isna(text) or str(text).lower() == 'nan':
-        return "-"
-    return str(text)
+# --- 4. EXCEL ENGINE (AUTO-SPLIT BY BRANCH) ---
+def clean_sheet_name(name):
+    """Sanitize string to be a valid Excel sheet name"""
+    if not name: return "Unknown"
+    # Remove invalid characters [] : * ? / \
+    clean = re.sub(r'[\[\]:*?/\\]', '', str(name))
+    # Max length 31 characters
+    return clean[:31]
 
 def generate_excel(df):
     output = io.BytesIO()
     
+    # Get unique branches for splitting
+    if not df.empty and 'Branch' in df.columns:
+        branches = df['Branch'].unique()
+    else:
+        branches = ["Data"]
+
     if HAS_XLSXWRITER:
-        # --- ADVANCED MODE (Professional Table & Colors) ---
+        # --- ADVANCED MODE (Split Tabs + Formatting) ---
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
             
             # --- FORMATS ---
-            # 1. Header Format (Navy Blue)
             header_fmt = workbook.add_format({
                 'bold': True, 'font_color': 'white', 'bg_color': '#1E3A8A',
                 'border': 1, 'align': 'center', 'valign': 'vcenter'
             })
-            
-            # 2. Duplicate Items Format (Red Text, Bold)
             duplicate_fmt = workbook.add_format({
-                'font_color': '#9C0006', # Dark Red text
-                'bg_color':   '#FFC7CE'  # Light Red fill
+                'font_color': '#9C0006', 'bg_color': '#FFC7CE'
             })
-
-            # 3. Category: Missing (Red Fill)
             cat_missing_fmt = workbook.add_format({
                 'bg_color': '#FFE6E6', 'border': 1
             })
-            
-            # 4. Category: Request (Blue Fill)
             cat_request_fmt = workbook.add_format({
                 'bg_color': '#E6F3FF', 'border': 1
             })
 
-            # ==========================================
-            # SHEET 1: ADVANCED DATA TABLE
-            # ==========================================
-            sheet_name = 'Warbixin (Data)'
-            sheet_data = workbook.add_worksheet(sheet_name)
-            
-            if not df.empty:
-                # 1. Write Data (Start at Row 1 to leave room for Table Header)
-                df.to_excel(writer, sheet_name=sheet_name, startrow=1, header=False, index=False)
+            # --- LOOP THROUGH BRANCHES ---
+            for branch in branches:
+                # 1. Filter Data
+                if 'Branch' in df.columns:
+                    sub_df = df[df['Branch'] == branch]
+                else:
+                    sub_df = df
                 
-                (max_row, max_col) = df.shape
+                if sub_df.empty: continue
+
+                # 2. Create Sheet Name
+                sheet_name = clean_sheet_name(branch)
+                sheet = workbook.add_worksheet(sheet_name)
                 
-                # 2. Create Excel Table with Filters
-                column_settings = [{'header': column} for column in df.columns]
-                sheet_data.add_table(0, 0, max_row, max_col - 1, {
+                # 3. Write Data
+                sub_df.to_excel(writer, sheet_name=sheet_name, startrow=1, header=False, index=False)
+                
+                # 4. Create Table
+                (max_row, max_col) = sub_df.shape
+                column_settings = [{'header': column} for column in sub_df.columns]
+                
+                sheet.add_table(0, 0, max_row, max_col - 1, {
                     'columns': column_settings,
-                    'style': 'TableStyleMedium9', # Professional Blue Style
-                    'name': 'MareeroTable'
+                    'style': 'TableStyleMedium9',
+                    'name': f"Table_{random.randint(1000,9999)}" # Unique table name
                 })
                 
-                # 3. Find Indices for columns
-                # We need column letters for conditional formatting
-                cols = df.columns.tolist()
+                # 5. Apply Formatting logic (Same as before, just inside the loop)
+                cols = sub_df.columns.tolist()
                 
-                # A. HIGHLIGHT DUPLICATES in 'Item' column
+                # Duplicates Highlight
                 if 'Item' in cols:
-                    item_col_idx = cols.index('Item')
-                    # Calculate Excel Range (e.g., E2:E100)
-                    item_col_letter = chr(65 + item_col_idx) 
-                    rng = f"{item_col_letter}2:{item_col_letter}{max_row+1}"
-                    
-                    sheet_data.conditional_format(rng, {
-                        'type':     'duplicate',
-                        'format':   duplicate_fmt
-                    })
+                    item_idx = cols.index('Item')
+                    letter = chr(65 + item_idx)
+                    rng = f"{letter}2:{letter}{max_row+1}"
+                    sheet.conditional_format(rng, {'type': 'duplicate', 'format': duplicate_fmt})
 
-                # B. HIGHLIGHT CATEGORIES
+                # Category Colors
                 if 'Category' in cols:
-                    cat_col_idx = cols.index('Category')
-                    cat_col_letter = chr(65 + cat_col_idx)
-                    rng_cat = f"{cat_col_letter}2:{cat_col_letter}{max_row+1}"
+                    cat_idx = cols.index('Category')
+                    letter = chr(65 + cat_idx)
+                    rng = f"{letter}2:{letter}{max_row+1}"
+                    sheet.conditional_format(rng, {'type': 'text', 'criteria': 'containing', 'value': "go'an", 'format': cat_missing_fmt})
+                    sheet.conditional_format(rng, {'type': 'text', 'criteria': 'containing', 'value': "Dadweynaha", 'format': cat_request_fmt})
 
-                    # Rule 1: Missing -> Red
-                    sheet_data.conditional_format(rng_cat, {
-                        'type':     'text',
-                        'criteria': 'containing',
-                        'value':    "go'an",
-                        'format':   cat_missing_fmt
-                    })
-                    
-                    # Rule 2: Request -> Blue
-                    sheet_data.conditional_format(rng_cat, {
-                        'type':     'text',
-                        'criteria': 'containing',
-                        'value':    "Dadweynaha",
-                        'format':   cat_request_fmt
-                    })
+                # Auto-fit Widths
+                for i, col in enumerate(sub_df.columns):
+                    max_len = max(sub_df[col].astype(str).map(len).max(), len(str(col))) + 4
+                    sheet.set_column(i, i, max_len)
 
-                # 4. Auto-fit Column Widths
-                for i, col in enumerate(df.columns):
-                    # Length of header vs max content length
-                    max_len = max(
-                        df[col].astype(str).map(len).max(),
-                        len(str(col))
-                    ) + 4 # Add padding
-                    sheet_data.set_column(i, i, max_len)
-            else:
-                sheet_data.write('A1', "No Data Found")
-                
     else:
-        # --- BASIC FALLBACK (No Charts/Formats) ---
+        # --- BASIC FALLBACK (Split Tabs only, no colors) ---
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Warbixin')
+            for branch in branches:
+                if 'Branch' in df.columns:
+                    sub_df = df[df['Branch'] == branch]
+                else:
+                    sub_df = df
+                
+                if not sub_df.empty:
+                    sheet_name = clean_sheet_name(branch)
+                    sub_df.to_excel(writer, index=False, sheet_name=sheet_name)
 
     output.seek(0)
     return output
@@ -625,6 +616,5 @@ with tab_manager:
                                 st.rerun()
                 else:
                     st.info("No data found for this filter.")
-
 
 
