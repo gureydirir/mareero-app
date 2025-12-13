@@ -102,23 +102,9 @@ except Exception as e:
     st.error(f"⚠️ Connection Error: {e}")
     st.stop()
 
-# --- 4. EXCEL ENGINE (NAVIGATION + PRINT READY) ---
-def clean_sheet_name(name):
-    """Sanitize string to be a valid Excel sheet name"""
-    if not name: return "Unknown"
-    # Remove invalid characters [] : * ? / \
-    clean = re.sub(r'[\[\]:*?/\\]', '', str(name))
-    # Max length 31 characters
-    return clean[:31]
-
+# --- 4. EXCEL ENGINE (SINGLE SHEET - COLOR CODED) ---
 def generate_excel(df):
     output = io.BytesIO()
-    
-    # Get unique branches for splitting
-    if not df.empty and 'Branch' in df.columns:
-        branches = sorted(df['Branch'].unique())
-    else:
-        branches = ["Data"]
 
     if HAS_XLSXWRITER:
         # --- ADVANCED MODE ---
@@ -126,118 +112,108 @@ def generate_excel(df):
             workbook = writer.book
             
             # --- STYLES ---
-            header_fmt = workbook.add_format({
-                'bold': True, 'font_color': 'white', 'bg_color': '#1E3A8A',
-                'border': 1, 'align': 'center', 'valign': 'vcenter'
-            })
-            # Style for Navigation Links
-            link_fmt = workbook.add_format({
-                'font_color': 'blue', 'underline': True, 'bold': True, 'font_size': 12
-            })
-            title_fmt = workbook.add_format({
-                'bold': True, 'font_size': 18, 'font_color': '#1E3A8A'
-            })
-            duplicate_fmt = workbook.add_format({'font_color': '#9C0006', 'bg_color': '#FFC7CE'})
-            cat_missing_fmt = workbook.add_format({'bg_color': '#FFE6E6', 'border': 1})
-            cat_request_fmt = workbook.add_format({'bg_color': '#E6F3FF', 'border': 1})
-
-            # ------------------------------------------------
-            # 1. CREATE "HOME" (TABLE OF CONTENTS) SHEET
-            # ------------------------------------------------
-            sheet_home = workbook.add_worksheet("HOME")
-            sheet_home.hide_gridlines(2) # Hide gridlines
-            sheet_home.set_tab_color('#1E3A8A') # Navy Blue Tab
+            # 1. Pastel Colors for Branches (Row Backgrounds)
+            branch_colors = [
+                '#E3F2FD', # Blue-ish
+                '#E8F5E9', # Green-ish
+                '#FFF3E0', # Orange-ish
+                '#F3E5F5', # Purple-ish
+                '#FBE9E7', # Red-ish
+                '#E0F7FA', # Cyan-ish
+                '#FFFDE7'  # Yellow-ish
+            ]
             
-            sheet_home.write('B2', "MAREERO SYSTEM REPORTS", title_fmt)
-            sheet_home.write('B3', f"Date: {get_local_time().strftime('%d-%b-%Y')}")
-            sheet_home.write('B5', "Click a Branch below to view details:", workbook.add_format({'italic': True}))
+            # 2. Text Highlights (For Categories/Duplicates)
+            duplicate_fmt = workbook.add_format({'font_color': '#9C0006', 'bold': True})
             
-            # We will populate the links after creating the sheets to ensure names are correct
-            created_sheet_names = []
+            # Category: Missing (Red Text + Bold)
+            cat_missing_fmt = workbook.add_format({'font_color': '#D32F2F', 'bold': True})
+            
+            # Category: Request (Blue Text + Bold)
+            cat_request_fmt = workbook.add_format({'font_color': '#1976D2', 'bold': True})
 
-            # ------------------------------------------------
-            # 2. LOOP BRANCHES & CREATE DATA SHEETS
-            # ------------------------------------------------
-            for branch in branches:
-                if 'Branch' in df.columns:
-                    sub_df = df[df['Branch'] == branch]
-                else:
-                    sub_df = df
+            # ==========================================
+            # SINGLE SHEET: WARBIXIN
+            # ==========================================
+            sheet_name = 'Warbixin'
+            sheet = workbook.add_worksheet(sheet_name)
+            
+            # --- PRINT SETTINGS (A4, Landscape, Fit Width) ---
+            sheet.set_paper(9) # A4
+            sheet.set_landscape() 
+            sheet.fit_to_pages(1, 0) 
+            sheet.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+            sheet.repeat_rows(1)
+            
+            if not df.empty:
+                # 1. Write Data
+                df.to_excel(writer, sheet_name=sheet_name, startrow=1, header=False, index=False)
                 
-                if sub_df.empty: continue
-
-                # Clean Name
-                sheet_name = clean_sheet_name(branch)
-                created_sheet_names.append(sheet_name)
+                (max_row, max_col) = df.shape
                 
-                sheet = workbook.add_worksheet(sheet_name)
-                
-                # --- PRINT SETTINGS (A4, Landscape, Fit Width) ---
-                sheet.set_paper(9) # 9 = A4
-                sheet.set_landscape() # Landscape orientation
-                sheet.fit_to_pages(1, 0) # Fit to 1 page wide, infinite pages tall
-                sheet.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
-                sheet.repeat_rows(1) # Repeat header row on every page (Row 2 in Excel)
-                
-                # Write Data
-                sub_df.to_excel(writer, sheet_name=sheet_name, startrow=1, header=False, index=False)
-                
-                # Create Table
-                (max_row, max_col) = sub_df.shape
-                column_settings = [{'header': column} for column in sub_df.columns]
-                
+                # 2. Create Table
+                column_settings = [{'header': column} for column in df.columns]
                 sheet.add_table(0, 0, max_row, max_col - 1, {
                     'columns': column_settings,
-                    'style': 'TableStyleMedium9',
-                    'name': f"Tbl_{random.randint(1000,99999)}"
+                    'style': 'TableStyleMedium9', # Standard Blue Table
+                    'name': 'MasterTable'
                 })
                 
-                # Back to Home Link (Top Right)
-                sheet.write_url(0, max_col + 1, "internal:'HOME'!A1", string="🏠 Back to Home")
+                cols = df.columns.tolist()
                 
-                # Conditional Formatting
-                cols = sub_df.columns.tolist()
-                
+                # 3. BRANCH ROW COLORING
+                # We apply conditional formatting to the ENTIRE row range based on the Branch column
+                if 'Branch' in cols:
+                    branch_idx = cols.index('Branch')
+                    branch_letter = chr(65 + branch_idx) # e.g., 'C'
+                    
+                    # Get unique branches
+                    unique_branches = df['Branch'].unique()
+                    
+                    # Loop through branches and assign colors
+                    for i, branch in enumerate(unique_branches):
+                        # Cycle through the palette
+                        bg_color = branch_colors[i % len(branch_colors)]
+                        
+                        # Define format for this branch
+                        branch_fmt = workbook.add_format({'bg_color': bg_color, 'border': 1})
+                        
+                        # Apply to the whole table range
+                        # Formula: =$C2="BranchName" (Checks column C for every row)
+                        full_range = f"A2:{chr(65 + max_col - 1)}{max_row + 1}"
+                        sheet.conditional_format(full_range, {
+                            'type': 'formula',
+                            'criteria': f'=${branch_letter}2="{branch}"',
+                            'format': branch_fmt
+                        })
+
+                # 4. CATEGORY HIGHLIGHTING (Overwrites background with text color)
+                if 'Category' in cols:
+                    cat_idx = cols.index('Category')
+                    l = chr(65 + cat_idx)
+                    rng = f"{l}2:{l}{max_row+1}"
+                    
+                    sheet.conditional_format(rng, {'type': 'text', 'criteria': 'containing', 'value': "go'an", 'format': cat_missing_fmt})
+                    sheet.conditional_format(rng, {'type': 'text', 'criteria': 'containing', 'value': "Dadweynaha", 'format': cat_request_fmt})
+
+                # 5. DUPLICATE ITEMS
                 if 'Item' in cols:
                     item_idx = cols.index('Item')
                     l = chr(65 + item_idx)
                     rng = f"{l}2:{l}{max_row+1}"
                     sheet.conditional_format(rng, {'type': 'duplicate', 'format': duplicate_fmt})
 
-                if 'Category' in cols:
-                    cat_idx = cols.index('Category')
-                    l = chr(65 + cat_idx)
-                    rng = f"{l}2:{l}{max_row+1}"
-                    sheet.conditional_format(rng, {'type': 'text', 'criteria': 'containing', 'value': "go'an", 'format': cat_missing_fmt})
-                    sheet.conditional_format(rng, {'type': 'text', 'criteria': 'containing', 'value': "Dadweynaha", 'format': cat_request_fmt})
-
-                # Auto-fit Widths
-                for i, col in enumerate(sub_df.columns):
-                    max_len = max(sub_df[col].astype(str).map(len).max(), len(str(col))) + 4
+                # 6. AUTO-FIT
+                for i, col in enumerate(df.columns):
+                    max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 4
                     sheet.set_column(i, i, max_len)
-
-            # ------------------------------------------------
-            # 3. FILL "HOME" SHEET WITH LINKS
-            # ------------------------------------------------
-            row_idx = 6
-            for s_name in created_sheet_names:
-                # Add hyperlink: internal:'SheetName'!A1
-                # Must handle spaces in sheet names by wrapping in single quotes
-                sheet_home.write_url(row_idx, 1, f"internal:'{s_name}'!A1", link_fmt, string=f"👉 Go to {s_name}")
-                row_idx += 2 # Add spacing
+            else:
+                sheet.write('A1', "No Data Found")
 
     else:
         # --- BASIC FALLBACK ---
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            for branch in branches:
-                if 'Branch' in df.columns:
-                    sub_df = df[df['Branch'] == branch]
-                else:
-                    sub_df = df
-                
-                if not sub_df.empty:
-                    sheet_name = clean_sheet_name(branch)
-                    sub_df.to_excel(writer, index=False, sheet_name=sheet_name)
+            df.to_excel(writer, index=False, sheet_name='Warbixin')
 
     output.seek(0)
     return output
