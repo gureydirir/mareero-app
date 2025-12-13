@@ -25,6 +25,13 @@ from reportlab.lib import colors
 import io
 import random
 
+# Check for xlsxwriter availability to prevent crashes
+try:
+    import xlsxwriter
+    HAS_XLSXWRITER = True
+except ImportError:
+    HAS_XLSXWRITER = False
+
 # --- 1. SETUP TIMEZONE (Somalia) ---
 def get_local_time():
     tz = pytz.timezone('Africa/Mogadishu') 
@@ -97,113 +104,104 @@ def clean_text(text):
 def generate_excel(df):
     output = io.BytesIO()
     
-    # We use xlsxwriter as the engine for advanced charts and formatting
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        workbook = writer.book
-        
-        # --- STYLES ---
-        header_fmt = workbook.add_format({
-            'bold': True, 'font_color': 'white', 'bg_color': '#1E3A8A',
-            'border': 1, 'align': 'center', 'valign': 'vcenter'
-        })
-        title_fmt = workbook.add_format({
-            'bold': True, 'font_size': 16, 'font_color': '#1E3A8A', 'align': 'left'
-        })
-        date_fmt = workbook.add_format({'num_format': 'dd/mm/yyyy hh:mm'})
-        center_fmt = workbook.add_format({'align': 'center', 'valign': 'vcenter'})
-        
-        # ==========================================
-        # SHEET 1: DASHBOARD (ANALYSIS)
-        # ==========================================
-        sheet_dash = workbook.add_worksheet('Dashboard')
-        sheet_dash.hide_gridlines(2)
-        
-        # Title
-        sheet_dash.write('B2', "MAREERO SYSTEM - OPERATIONAL DASHBOARD", title_fmt)
-        sheet_dash.write('B3', f"Generated on: {get_local_time().strftime('%d %B %Y %I:%M %p')}")
+    if HAS_XLSXWRITER:
+        # --- ADVANCED MODE (Charts & Dashboards) ---
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            workbook = writer.book
+            
+            # --- STYLES ---
+            header_fmt = workbook.add_format({
+                'bold': True, 'font_color': 'white', 'bg_color': '#1E3A8A',
+                'border': 1, 'align': 'center', 'valign': 'vcenter'
+            })
+            title_fmt = workbook.add_format({
+                'bold': True, 'font_size': 16, 'font_color': '#1E3A8A', 'align': 'left'
+            })
+            
+            # ==========================================
+            # SHEET 1: DASHBOARD (ANALYSIS)
+            # ==========================================
+            sheet_dash = workbook.add_worksheet('Dashboard')
+            sheet_dash.hide_gridlines(2)
+            
+            # Title
+            sheet_dash.write('B2', "MAREERO SYSTEM - OPERATIONAL DASHBOARD", title_fmt)
+            sheet_dash.write('B3', f"Generated on: {get_local_time().strftime('%d %B %Y %I:%M %p')}")
 
-        if not df.empty:
-            # -- DATA PREP FOR CHARTS --
-            # 1. Branch Counts
-            branch_counts = df['Branch'].value_counts().reset_index()
-            branch_counts.columns = ['Branch', 'Count']
-            
-            # 2. Category Counts
-            cat_counts = df['Category'].value_counts().reset_index()
-            cat_counts.columns = ['Category', 'Count']
-            
-            # Write Summary Tables (Hidden area usually, but visible here for context)
-            sheet_dash.write('B6', "Warbixinta Laamaha (Branch Stats)", header_fmt)
-            branch_counts.to_excel(writer, sheet_name='Dashboard', startrow=6, startcol=1, index=False)
-            
-            sheet_dash.write('F6', "Noocyada Warbixinta (Categories)", header_fmt)
-            cat_counts.to_excel(writer, sheet_name='Dashboard', startrow=6, startcol=5, index=False)
-            
-            # -- CHART 1: COLUMN CHART (BRANCHES) --
-            chart_col = workbook.add_chart({'type': 'column'})
-            chart_col.add_series({
-                'name':       'Reports per Branch',
-                'categories': ['Dashboard', 7, 1, 7 + len(branch_counts) - 1, 1],
-                'values':     ['Dashboard', 7, 2, 7 + len(branch_counts) - 1, 2],
-                'fill':       {'color': '#1E3A8A'},
-                'data_labels': {'value': True}
-            })
-            chart_col.set_title({'name': 'Activity by Branch'})
-            chart_col.set_x_axis({'name': 'Branch Name'})
-            chart_col.set_y_axis({'name': 'Total Reports'})
-            chart_col.set_style(11)
-            sheet_dash.insert_chart('B12', chart_col, {'x_scale': 1.5, 'y_scale': 1.2})
-            
-            # -- CHART 2: PIE CHART (CATEGORIES) --
-            chart_pie = workbook.add_chart({'type': 'pie'})
-            chart_pie.add_series({
-                'name':       'Categories',
-                'categories': ['Dashboard', 7, 5, 7 + len(cat_counts) - 1, 5],
-                'values':     ['Dashboard', 7, 6, 7 + len(cat_counts) - 1, 6],
-                'data_labels': {'percentage': True},
-            })
-            chart_pie.set_title({'name': 'Category Distribution'})
-            chart_pie.set_style(10)
-            sheet_dash.insert_chart('J12', chart_pie, {'x_scale': 1.2, 'y_scale': 1.2})
-            
-        else:
-            sheet_dash.write('B6', "No data available for analysis.")
+            if not df.empty:
+                # -- DATA PREP FOR CHARTS --
+                # 1. Branch Counts
+                branch_counts = df['Branch'].value_counts().reset_index()
+                branch_counts.columns = ['Branch', 'Count']
+                
+                # 2. Category Counts
+                cat_counts = df['Category'].value_counts().reset_index()
+                cat_counts.columns = ['Category', 'Count']
+                
+                # Write Summary Tables
+                sheet_dash.write('B6', "Warbixinta Laamaha (Branch Stats)", header_fmt)
+                branch_counts.to_excel(writer, sheet_name='Dashboard', startrow=6, startcol=1, index=False)
+                
+                sheet_dash.write('F6', "Noocyada Warbixinta (Categories)", header_fmt)
+                cat_counts.to_excel(writer, sheet_name='Dashboard', startrow=6, startcol=5, index=False)
+                
+                # -- CHART 1: COLUMN CHART (BRANCHES) --
+                chart_col = workbook.add_chart({'type': 'column'})
+                chart_col.add_series({
+                    'name':       'Reports per Branch',
+                    'categories': ['Dashboard', 7, 1, 7 + len(branch_counts) - 1, 1],
+                    'values':     ['Dashboard', 7, 2, 7 + len(branch_counts) - 1, 2],
+                    'fill':       {'color': '#1E3A8A'},
+                    'data_labels': {'value': True}
+                })
+                chart_col.set_title({'name': 'Activity by Branch'})
+                chart_col.set_style(11)
+                sheet_dash.insert_chart('B12', chart_col, {'x_scale': 1.5, 'y_scale': 1.2})
+                
+                # -- CHART 2: PIE CHART (CATEGORIES) --
+                chart_pie = workbook.add_chart({'type': 'pie'})
+                chart_pie.add_series({
+                    'name':       'Categories',
+                    'categories': ['Dashboard', 7, 5, 7 + len(cat_counts) - 1, 5],
+                    'values':     ['Dashboard', 7, 6, 7 + len(cat_counts) - 1, 6],
+                    'data_labels': {'percentage': True},
+                })
+                chart_pie.set_title({'name': 'Category Distribution'})
+                chart_pie.set_style(10)
+                sheet_dash.insert_chart('J12', chart_pie, {'x_scale': 1.2, 'y_scale': 1.2})
+                
+            else:
+                sheet_dash.write('B6', "No data available for analysis.")
 
-        # ==========================================
-        # SHEET 2: RAW DATA (PROFESSIONAL TABLE)
-        # ==========================================
-        sheet_data = workbook.add_worksheet('Detailed Report')
-        
-        # Write Data
-        if not df.empty:
-            df.to_excel(writer, sheet_name='Detailed Report', startrow=1, header=False, index=False)
-            
-            # Get dimensions
-            (max_row, max_col) = df.shape
-            column_settings = [{'header': column} for column in df.columns]
-            
-            # Add Table Structure (Filters, Stripes, Blue Header)
-            sheet_data.add_table(0, 0, max_row, max_col - 1, {
-                'columns': column_settings,
-                'style': 'TableStyleMedium9', # Blue Theme
-                'name': 'MareeroData'
-            })
-            
-            # Formatting Columns width
-            for i, col in enumerate(df.columns):
-                # Calculate width based on max text length
-                max_len = max(
-                    df[col].astype(str).map(len).max(),
-                    len(str(col))
-                ) + 2
-                sheet_data.set_column(i, i, max_len)
-        else:
-            sheet_data.write('A1', "No Data Found")
+            # ==========================================
+            # SHEET 2: RAW DATA
+            # ==========================================
+            sheet_data = workbook.add_worksheet('Detailed Report')
+            if not df.empty:
+                df.to_excel(writer, sheet_name='Detailed Report', startrow=1, header=False, index=False)
+                (max_row, max_col) = df.shape
+                column_settings = [{'header': column} for column in df.columns]
+                sheet_data.add_table(0, 0, max_row, max_col - 1, {
+                    'columns': column_settings,
+                    'style': 'TableStyleMedium9',
+                    'name': 'MareeroData'
+                })
+                for i, col in enumerate(df.columns):
+                    max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 2
+                    sheet_data.set_column(i, i, max_len)
+            else:
+                sheet_data.write('A1', "No Data Found")
+                
+    else:
+        # --- BASIC FALLBACK (No Charts) ---
+        # This runs if xlsxwriter is missing
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Warbixin')
 
     output.seek(0)
     return output
 
-# --- 5. PDF ENGINE (FIXED PAGE 2 & NAME CHANGE) ---
+# --- 5. PDF ENGINE ---
 def generate_pdf(df):
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -519,6 +517,9 @@ with tab_manager:
                         use_container_width=True
                     )
                 with c2:
+                    if not HAS_XLSXWRITER:
+                        st.caption("⚠️ Install 'xlsxwriter' for advanced charts. Using basic mode.")
+                    
                     st.download_button(
                         label=f"📥 Download Excel ({len(filtered_df)} items)",
                         data=generate_excel(filtered_df),
@@ -610,5 +611,6 @@ with tab_manager:
                                 st.rerun()
                 else:
                     st.info("No data found for this filter.")
+
 
 
