@@ -2,6 +2,6 @@ streamlit
 pandas
 matplotlib
 reportlab
-streamlit-gsheets
+st-gsheets-connection
 xlsxwriter
 openpyxl
