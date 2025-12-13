@@ -14,7 +14,13 @@ import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 
-from streamlit_gsheets import GSheetsConnection
+# Try importing the connection; handle potential install name mismatches gracefully
+try:
+    from streamlit_gsheets import GSheetsConnection
+except ImportError:
+    st.error("⚠️ Library Error: 'st-gsheets-connection' is missing. Please add it to requirements.txt")
+    st.stop()
+
 import pandas as pd
 from datetime import datetime
 import pytz 
@@ -95,7 +101,7 @@ except Exception as e:
     st.error(f"⚠️ Connection Error: {e}")
     st.stop()
 
-# --- 4. EXCEL ENGINE (ADVANCED & PROFESSIONAL) ---
+# --- 4. EXCEL ENGINE (ADVANCED TABLE STYLING) ---
 def clean_text(text):
     if pd.isna(text) or str(text).lower() == 'nan':
         return "-"
@@ -105,96 +111,104 @@ def generate_excel(df):
     output = io.BytesIO()
     
     if HAS_XLSXWRITER:
-        # --- ADVANCED MODE (Charts & Dashboards) ---
+        # --- ADVANCED MODE (Professional Table & Colors) ---
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
             
-            # --- STYLES ---
+            # --- FORMATS ---
+            # 1. Header Format (Navy Blue)
             header_fmt = workbook.add_format({
                 'bold': True, 'font_color': 'white', 'bg_color': '#1E3A8A',
                 'border': 1, 'align': 'center', 'valign': 'vcenter'
             })
-            title_fmt = workbook.add_format({
-                'bold': True, 'font_size': 16, 'font_color': '#1E3A8A', 'align': 'left'
+            
+            # 2. Duplicate Items Format (Red Text, Bold)
+            duplicate_fmt = workbook.add_format({
+                'font_color': '#9C0006', # Dark Red text
+                'bg_color':   '#FFC7CE'  # Light Red fill
+            })
+
+            # 3. Category: Missing (Red Fill)
+            cat_missing_fmt = workbook.add_format({
+                'bg_color': '#FFE6E6', 'border': 1
             })
             
+            # 4. Category: Request (Blue Fill)
+            cat_request_fmt = workbook.add_format({
+                'bg_color': '#E6F3FF', 'border': 1
+            })
+
             # ==========================================
-            # SHEET 1: DASHBOARD (ANALYSIS)
+            # SHEET 1: ADVANCED DATA TABLE
             # ==========================================
-            sheet_dash = workbook.add_worksheet('Dashboard')
-            sheet_dash.hide_gridlines(2)
+            sheet_name = 'Warbixin (Data)'
+            sheet_data = workbook.add_worksheet(sheet_name)
             
-            # Title
-            sheet_dash.write('B2', "MAREERO SYSTEM - OPERATIONAL DASHBOARD", title_fmt)
-            sheet_dash.write('B3', f"Generated on: {get_local_time().strftime('%d %B %Y %I:%M %p')}")
-
             if not df.empty:
-                # -- DATA PREP FOR CHARTS --
-                # 1. Branch Counts
-                branch_counts = df['Branch'].value_counts().reset_index()
-                branch_counts.columns = ['Branch', 'Count']
+                # 1. Write Data (Start at Row 1 to leave room for Table Header)
+                df.to_excel(writer, sheet_name=sheet_name, startrow=1, header=False, index=False)
                 
-                # 2. Category Counts
-                cat_counts = df['Category'].value_counts().reset_index()
-                cat_counts.columns = ['Category', 'Count']
-                
-                # Write Summary Tables
-                sheet_dash.write('B6', "Warbixinta Laamaha (Branch Stats)", header_fmt)
-                branch_counts.to_excel(writer, sheet_name='Dashboard', startrow=6, startcol=1, index=False)
-                
-                sheet_dash.write('F6', "Noocyada Warbixinta (Categories)", header_fmt)
-                cat_counts.to_excel(writer, sheet_name='Dashboard', startrow=6, startcol=5, index=False)
-                
-                # -- CHART 1: COLUMN CHART (BRANCHES) --
-                chart_col = workbook.add_chart({'type': 'column'})
-                chart_col.add_series({
-                    'name':       'Reports per Branch',
-                    'categories': ['Dashboard', 7, 1, 7 + len(branch_counts) - 1, 1],
-                    'values':     ['Dashboard', 7, 2, 7 + len(branch_counts) - 1, 2],
-                    'fill':       {'color': '#1E3A8A'},
-                    'data_labels': {'value': True}
-                })
-                chart_col.set_title({'name': 'Activity by Branch'})
-                chart_col.set_style(11)
-                sheet_dash.insert_chart('B12', chart_col, {'x_scale': 1.5, 'y_scale': 1.2})
-                
-                # -- CHART 2: PIE CHART (CATEGORIES) --
-                chart_pie = workbook.add_chart({'type': 'pie'})
-                chart_pie.add_series({
-                    'name':       'Categories',
-                    'categories': ['Dashboard', 7, 5, 7 + len(cat_counts) - 1, 5],
-                    'values':     ['Dashboard', 7, 6, 7 + len(cat_counts) - 1, 6],
-                    'data_labels': {'percentage': True},
-                })
-                chart_pie.set_title({'name': 'Category Distribution'})
-                chart_pie.set_style(10)
-                sheet_dash.insert_chart('J12', chart_pie, {'x_scale': 1.2, 'y_scale': 1.2})
-                
-            else:
-                sheet_dash.write('B6', "No data available for analysis.")
-
-            # ==========================================
-            # SHEET 2: RAW DATA
-            # ==========================================
-            sheet_data = workbook.add_worksheet('Detailed Report')
-            if not df.empty:
-                df.to_excel(writer, sheet_name='Detailed Report', startrow=1, header=False, index=False)
                 (max_row, max_col) = df.shape
+                
+                # 2. Create Excel Table with Filters
                 column_settings = [{'header': column} for column in df.columns]
                 sheet_data.add_table(0, 0, max_row, max_col - 1, {
                     'columns': column_settings,
-                    'style': 'TableStyleMedium9',
-                    'name': 'MareeroData'
+                    'style': 'TableStyleMedium9', # Professional Blue Style
+                    'name': 'MareeroTable'
                 })
+                
+                # 3. Find Indices for columns
+                # We need column letters for conditional formatting
+                cols = df.columns.tolist()
+                
+                # A. HIGHLIGHT DUPLICATES in 'Item' column
+                if 'Item' in cols:
+                    item_col_idx = cols.index('Item')
+                    # Calculate Excel Range (e.g., E2:E100)
+                    item_col_letter = chr(65 + item_col_idx) 
+                    rng = f"{item_col_letter}2:{item_col_letter}{max_row+1}"
+                    
+                    sheet_data.conditional_format(rng, {
+                        'type':     'duplicate',
+                        'format':   duplicate_fmt
+                    })
+
+                # B. HIGHLIGHT CATEGORIES
+                if 'Category' in cols:
+                    cat_col_idx = cols.index('Category')
+                    cat_col_letter = chr(65 + cat_col_idx)
+                    rng_cat = f"{cat_col_letter}2:{cat_col_letter}{max_row+1}"
+
+                    # Rule 1: Missing -> Red
+                    sheet_data.conditional_format(rng_cat, {
+                        'type':     'text',
+                        'criteria': 'containing',
+                        'value':    "go'an",
+                        'format':   cat_missing_fmt
+                    })
+                    
+                    # Rule 2: Request -> Blue
+                    sheet_data.conditional_format(rng_cat, {
+                        'type':     'text',
+                        'criteria': 'containing',
+                        'value':    "Dadweynaha",
+                        'format':   cat_request_fmt
+                    })
+
+                # 4. Auto-fit Column Widths
                 for i, col in enumerate(df.columns):
-                    max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 2
+                    # Length of header vs max content length
+                    max_len = max(
+                        df[col].astype(str).map(len).max(),
+                        len(str(col))
+                    ) + 4 # Add padding
                     sheet_data.set_column(i, i, max_len)
             else:
                 sheet_data.write('A1', "No Data Found")
                 
     else:
-        # --- BASIC FALLBACK (No Charts) ---
-        # This runs if xlsxwriter is missing
+        # --- BASIC FALLBACK (No Charts/Formats) ---
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Warbixin')
 
