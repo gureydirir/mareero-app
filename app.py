@@ -116,6 +116,7 @@ GSHEET_ID = "1ZcYgQfWoexjj1bpwsgRywFw4L05lD2I4Zg3MCGr_2f0"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{GSHEET_ID}/export?format=csv"
 LOCAL_FILE = "mareero_data.csv"
 
+@st.cache_data(ttl=60, show_spinner=False)
 def load_data():
     # 🩹 FIX: Prevent Duplicate Data Logic
     # If we have a local file, it IS the master database. Do not merge with Google Sheet again.
