@@ -592,8 +592,10 @@ st.markdown("""
             font-family: 'Inter', sans-serif;
         }
         
+        /* Main Background - Use Native Theme, or transparent */
         .stApp {
-            background-color: #F8FAFC;
+            /* Removing hardcoded white background so Dark Mode works */
+            background-color: transparent; 
         }
         
         .block-container {
@@ -659,22 +661,22 @@ st.markdown("""
             z-index: 10;
         }
         
-        /* Modern Tabs */
+        /* Modern Tabs - Theme Aware */
         .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
-            background-color: #ffffff;
+            background-color: var(--secondary-background-color);
             padding: 8px;
             border-radius: 50px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             display: inline-flex;
             justify-content: center;
             margin: 0 auto 20px auto;
-            border: 1px solid #F1F5F9;
+            border: 1px solid rgba(128, 128, 128, 0.2); 
         }
         .stTabs [data-baseweb="tab"] {
             height: 40px;
             border-radius: 40px;
-            color: #64748B;
+            color: var(--text-color);
             font-weight: 600;
             font-size: 14px;
             padding: 0 24px;
